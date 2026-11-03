@@ -12,6 +12,11 @@ import fnmatch
 import json
 import os
 import random
+import re
+import urllib.request
+
+LIVE_BASE = "https://dreamland.rocks/play/sounds/"
+SAFE_FILE = re.compile(r"^[a-z0-9_-]+/[a-z0-9_.-]+\.(mp3|ogg|wav)$", re.I)
 
 try:
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -30,19 +35,17 @@ def _int(v, lo, hi, default):
 
 
 class SoundPlayer:
-    def __init__(self, folder, prefs):
-        self.folder = folder
+    def __init__(self, folder, prefs, live_folder=None):
+        self.folder = folder            # sounds shipped with the client
+        self.live_folder = live_folder  # sounds fetched from the web client
         self.prefs = prefs          # dict: mute, master, types{}
         self.library = []
         self.cache = {}
         self.effect = None          # (channel, priority)
         self.music_name = None
         self.ok = False
-        try:
-            with open(os.path.join(folder, "manifest.json"), encoding="utf-8") as f:
-                self.library = json.load(f).get("sounds", [])
-        except (OSError, ValueError):
-            self.library = []
+        self.on_missing = None      # called with (kind, name, opts) for a sound not in the library
+        self.reload()
         if pygame:
             try:
                 pygame.mixer.init()
@@ -53,6 +56,27 @@ class SoundPlayer:
                 self.ok = True
             except Exception:
                 self.ok = False
+
+    def reload(self):
+        """Use the newest manifest: the web client's when fetched, else the bundled one."""
+        for folder in (self.live_folder, self.folder):
+            if not folder:
+                continue
+            try:
+                with open(os.path.join(folder, "manifest.json"), encoding="utf-8") as f:
+                    sounds = json.load(f).get("sounds", [])
+            except (OSError, ValueError):
+                continue
+            self.library = [x for x in sounds if isinstance(x, dict) and SAFE_FILE.match(str(x.get("file", "")))
+                            and isinstance(x.get("name"), str)]
+            self.cache = {}
+            return
+
+    def path_for(self, file):
+        for folder in (self.live_folder, self.folder):
+            if folder and os.path.exists(os.path.join(folder, file)):
+                return os.path.join(folder, file)
+        return None
 
     def resolve(self, name):
         if not name:
@@ -72,7 +96,10 @@ class SoundPlayer:
     def _sound(self, entry):
         f = entry["file"]
         if f not in self.cache:
-            self.cache[f] = pygame.mixer.Sound(os.path.join(self.folder, f))
+            path = self.path_for(f)
+            if not path:
+                raise OSError(f)
+            self.cache[f] = pygame.mixer.Sound(path)
         return self.cache[f]
 
     def gain(self, kind, v):
@@ -97,7 +124,9 @@ class SoundPlayer:
         if self.prefs.get("mute"):
             return
         entry = self.resolve(name)
-        if not entry:
+        if not entry or not self.path_for(entry["file"]):
+            if self.on_missing:
+                self.on_missing("sound", name, opts)
             return
         v = _int(opts.get("V"), 0, 100, 100)
         loops = _int(opts.get("L"), -1, 100, 1) or 1
@@ -123,7 +152,9 @@ class SoundPlayer:
         if self.prefs.get("mute"):
             return
         entry = self.resolve(name)
-        if not entry:
+        if not entry or not self.path_for(entry["file"]):
+            if self.on_missing:
+                self.on_missing("music", name, opts)
             return
         v = _int(opts.get("V"), 0, 100, 100)
         loops = _int(opts.get("L"), -1, 100, 1) or 1
@@ -152,3 +183,78 @@ class SoundPlayer:
             pygame.mixer.stop()
         self.effect = None
         self.music_name = None
+
+
+def fetch_live_library(live_folder, bundled_folder, timeout=15):
+    """Bring the sound library up to the web client's, into live_folder.
+
+    Only names listed in the web client's manifest are fetched, only from
+    dreamland.rocks, and only as audio files under a type folder. A file the
+    client already has (bundled or fetched before) is not downloaded again.
+    Returns True when the manifest was saved.
+    """
+    req = urllib.request.Request(LIVE_BASE + "manifest.json", headers={"User-Agent": "DreamLand desktop client"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read(2_000_000)
+    data = json.loads(raw.decode("utf-8"))
+    sounds = data.get("sounds")
+    if not isinstance(sounds, list):
+        return False
+    os.makedirs(live_folder, exist_ok=True)
+    for x in sounds:
+        f = str((x or {}).get("file", ""))
+        if not SAFE_FILE.match(f):
+            continue
+        target = os.path.join(live_folder, *f.split("/"))
+        if os.path.exists(target) or os.path.exists(os.path.join(bundled_folder, *f.split("/"))):
+            continue
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        req = urllib.request.Request(LIVE_BASE + f, headers={"User-Agent": "DreamLand desktop client"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = r.read(5_000_000)
+        with open(target + ".part", "wb") as out:
+            out.write(body)
+        os.replace(target + ".part", target)
+    tmp = os.path.join(live_folder, "manifest.json.part")
+    with open(tmp, "wb") as out:
+        out.write(raw)
+    os.replace(tmp, os.path.join(live_folder, "manifest.json"))
+    return True
+
+
+def fetch_from_url(url, live_folder, timeout=15):
+    """An MSP U= download, only from dreamland.rocks over https.
+
+    The file lands under live_folder/server/<name>, and an entry for it is
+    added to the live manifest so the next request by the same name plays.
+    Returns the library name, or None when the address is not allowed.
+    """
+    from urllib.parse import urlparse
+    u = urlparse(url)
+    if u.scheme != "https" or u.hostname not in ("dreamland.rocks", "www.dreamland.rocks"):
+        return None
+    base = u.path.rsplit("/", 1)[-1]
+    if not re.match(r"^[a-z0-9_.-]+\.(mp3|ogg|wav)$", base, re.I):
+        return None
+    req = urllib.request.Request(url, headers={"User-Agent": "DreamLand desktop client"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        body = r.read(5_000_000)
+    target = os.path.join(live_folder, "server", base)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target + ".part", "wb") as out:
+        out.write(body)
+    os.replace(target + ".part", target)
+    name = "server/" + base.rsplit(".", 1)[0]
+    path = os.path.join(live_folder, "manifest.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        data = {"sounds": []}
+    sounds = [x for x in data.get("sounds", []) if x.get("name") != name]
+    sounds.append({"name": name, "type": "alert", "file": "server/" + base, "source": url})
+    data["sounds"] = sounds
+    with open(path + ".part", "w", encoding="utf-8") as out:
+        json.dump(data, out, ensure_ascii=False, indent=1)
+    os.replace(path + ".part", path)
+    return name

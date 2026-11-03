@@ -62,7 +62,10 @@ STRINGS = {
             "Ctrl+Shift+S turns speech of incoming text on and off.\n"
             "Ctrl+Shift+M mutes sounds. Ctrl+Shift+Up and Down change the volume.\n"
             "Ctrl+O connects, Ctrl+D disconnects.\n"
-            "Escape in the command field clears it."
+            "Escape in the command field clears it.\n"
+            "Ctrl+Shift+T triggers, Ctrl+Shift+K key macros, Ctrl+Shift+A aliases, Ctrl+Shift+O game settings.\n"
+            "Triggers, key macros and aliases are kept on the game server and shared with the web client.\n"
+            "In the command field: #var name value sets a variable, #hotkey f1 command sets a key, #5 command repeats a command."
         ),
         "credits.title": "Sound credits",
         "ok": "OK",
@@ -120,7 +123,10 @@ STRINGS = {
             "Ctrl+Shift+S вмикає і вимикає озвучення вхідного тексту.\n"
             "Ctrl+Shift+M вимикає звуки. Ctrl+Shift+стрілки вгору і вниз змінюють гучність.\n"
             "Ctrl+O підключає, Ctrl+D відключає.\n"
-            "Escape у полі команди очищає його."
+            "Escape у полі команди очищає його.\n"
+            "Ctrl+Shift+T тригери, Ctrl+Shift+K макроси клавіш, Ctrl+Shift+A синоніми, Ctrl+Shift+O налаштування гри.\n"
+            "Тригери, макроси і синоніми зберігаються на сервері гри і спільні з веб-клієнтом.\n"
+            "У полі команди: #var імʼя значення задає змінну, #hotkey f1 команда задає клавішу, #5 команда повторює команду."
         ),
         "credits.title": "Автори звуків",
         "ok": "Гаразд",
@@ -178,13 +184,22 @@ STRINGS = {
             "Ctrl+Shift+S включает и выключает озвучку входящего текста.\n"
             "Ctrl+Shift+M выключает звуки. Ctrl+Shift+стрелки вверх и вниз меняют громкость.\n"
             "Ctrl+O подключает, Ctrl+D отключает.\n"
-            "Escape в поле команды очищает его."
+            "Escape в поле команды очищает его.\n"
+            "Ctrl+Shift+T триггеры, Ctrl+Shift+K макросы клавиш, Ctrl+Shift+A синонимы, Ctrl+Shift+O настройки игры.\n"
+            "Триггеры, макросы и синонимы хранятся на сервере игры и общие с веб-клиентом.\n"
+            "В поле команды: #var имя значение задает переменную, #hotkey f1 команда задает клавишу, #5 команда повторяет команду."
         ),
         "credits.title": "Авторы звуков",
         "ok": "ОК",
         "cancel": "Отмена",
     },
 }
+
+
+from .i18n_tools import TOOLS  # noqa: E402
+
+for _lang, _strings in TOOLS.items():
+    STRINGS[_lang].update(_strings)
 
 
 class Tr:

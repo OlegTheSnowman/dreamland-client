@@ -12,6 +12,7 @@ DEFAULTS = {
         "types": {"combat": 100, "alert": 100, "chat": 100, "ui": 100, "ambient": 60, "music": 50},
     },
     "history": [],
+    "vars": {},
 }
 
 

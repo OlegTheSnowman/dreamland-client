@@ -1,7 +1,8 @@
 """The main window: game output above, command field below."""
 
-import json
 import os
+import threading
+import time
 import webbrowser
 
 import wx
@@ -9,8 +10,10 @@ import wx
 from . import prefs as prefs_mod
 from .connection import Connection, PROTO_VERSION
 from .i18n import GAME_MENU_CHOICE, LANGS, Tr
-from .markup import Link, OutputParser
-from .sound import SoundPlayer
+from . import dialogs
+from .markup import Line, OutputParser
+from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
+from .sound import SoundPlayer, fetch_from_url, fetch_live_library
 from .speech import Speech
 from .telnet import Telnet
 
@@ -32,10 +35,23 @@ class MainFrame(wx.Frame):
         super().__init__(None, title=self.tr("app.title"), size=(900, 700))
 
         self.speech = Speech()
-        self.sound = SoundPlayer(os.path.join(app_dir, "sounds"), self.prefs["sound"])
+        live = os.path.join(prefs_mod.folder(), "sounds")
+        self.sound = SoundPlayer(os.path.join(app_dir, "sounds"), self.prefs["sound"], live)
+        self.sound_live = live
+        self.sound_refreshed = 0.0
+        self.sound.on_missing = self._sound_missing
+        if not os.environ.get("DLCLIENT_QUIET"):
+            self.sound_refreshed = time.time()
+            threading.Thread(target=self._update_sounds, args=(live,), daemon=True).start()
         self.parser = OutputParser()
         self.telnet = Telnet()
         self.conn = Connection(self._frame_from_thread, self._state_from_thread)
+        later = lambda secs, fn: wx.CallLater(int(secs * 1000), fn)
+        self.triggers = Triggers(self.conn.rpc, later)
+        self.macros = Macros(self.conn.rpc, later)
+        self.aliases = Aliases(self.conn.rpc, self.conn.send_line, later)
+        self.vars = self.prefs.setdefault("vars", {})
+        self.settings_dlg = None
 
         self.lines = [["", []]]    # [text, links] per output line; last one is open
         self.history = list(self.prefs.get("history", []))[-HISTORY_MAX:]
@@ -118,6 +134,15 @@ class MainFrame(wx.Frame):
         self._item(opts, tr("menu.volume_down"), lambda e: self.change_volume(-10))
         mb.Append(opts, tr("menu.options"))
 
+        tools = wx.Menu()
+        self._item(tools, tr("menu.triggers"), lambda e: self.open_tool("triggers"))
+        self._item(tools, tr("menu.macros"), lambda e: self.open_tool("macros"))
+        self._item(tools, tr("menu.aliases"), lambda e: self.open_tool("aliases"))
+        self._item(tools, tr("menu.vars"), lambda e: self.open_tool("vars"))
+        tools.AppendSeparator()
+        self._item(tools, tr("menu.settings"), lambda e: self.open_settings())
+        mb.Append(tools, tr("menu.tools"))
+
         hlp = wx.Menu()
         self._item(hlp, tr("menu.keys"), lambda e: self.show_text(tr("keys.title"), tr("keys.text")))
         self._item(hlp, tr("menu.credits"), lambda e: self.show_credits())
@@ -129,6 +154,37 @@ class MainFrame(wx.Frame):
         it = menu.Append(wx.ID_ANY, label)
         self.Bind(wx.EVT_MENU, handler, it)
         return it
+
+    def _update_sounds(self, live, then=None):
+        try:
+            if fetch_live_library(live, os.path.join(self.app_dir, "sounds")):
+                wx.CallAfter(self.sound.reload)
+                if then:
+                    wx.CallAfter(then)
+        except Exception:
+            pass  # offline or the site changed: the bundled sounds still play
+
+    def _sound_missing(self, kind, name, opts):
+        """A sound the library does not have: fetch it, then play it if it arrives."""
+        url = (opts or {}).get("U")
+        if url:
+            def get():
+                try:
+                    full = url if url.lower().endswith((".mp3", ".ogg", ".wav")) else url.rstrip("/") + "/" + name
+                    got = fetch_from_url(full, self.sound_live)
+                except Exception:
+                    got = None
+                if got:
+                    wx.CallAfter(self.sound.reload)
+                    wx.CallAfter(self.sound.handle, kind, got, {k: v for k, v in opts.items() if k != "U"})
+            threading.Thread(target=get, daemon=True).start()
+            return
+        # The web client may have gained the sound since we last looked.
+        if time.time() - self.sound_refreshed < 300:
+            return
+        self.sound_refreshed = time.time()
+        replay = lambda: self.sound.resolve(name) and self.sound.handle(kind, name, opts)
+        threading.Thread(target=self._update_sounds, args=(self.sound_live, replay), daemon=True).start()
 
     # ------------------------------------------------------------- connection
     def connect(self):
@@ -155,6 +211,7 @@ class MainFrame(wx.Frame):
         if command == "console_out" and args:
             self.on_console(str(args[0]))
         elif command == "version":
+            self.reset_lists()
             self.lang_answered = False
             self.lang_menu_waiting = False
             self.parser.msp_enabled = False
@@ -169,6 +226,30 @@ class MainFrame(wx.Frame):
         elif command == "prompt" and args and isinstance(args[0], dict):
             self.prompt.update(args[0])
             self.update_status()
+            self.triggers.ask()
+            self.macros.ask()
+            self.aliases.ask()
+        elif command == "config_state":
+            self.reset_lists()
+        elif command == "triggers_data" and args:
+            self.triggers.on_data(args[0])
+        elif command == "triggers_saved" and args:
+            self.triggers.on_saved(args[0])
+        elif command == "macros_data" and args:
+            self.macros.on_data(args[0])
+        elif command == "macros_saved" and args:
+            self.macros.on_saved(args[0])
+        elif command == "aliases_char" and args:
+            self.aliases.on_char(args[0])
+        elif command == "aliases_acct" and args:
+            self.aliases.on_acct(args[0])
+        elif command == "aliases_acct_saved" and args:
+            self.aliases.on_saved(args[0])
+        elif command in ("config_schema", "config_result", "config_changed") and args:
+            dlg = self.settings_dlg
+            if dlg:
+                {"config_schema": dlg.on_schema, "config_result": dlg.on_result,
+                 "config_changed": dlg.on_changed}[command](args[0])
         elif command == "resume_failed" and not self.conn.resume_pending:
             if self.lang_menu_waiting:
                 self.answer_lang_menu()
@@ -193,7 +274,8 @@ class MainFrame(wx.Frame):
         lines, complete, msp = self.parser.parse(text)
         for kind, name, opts in msp:
             self.sound.handle(kind, name, opts)
-        self.append_lines(lines, complete)
+        starts = self.append_lines(lines, complete)
+        self.run_triggers(lines, starts)
         if self.prefs.get("speech"):
             spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">")
             self.speech.say(spoken)
@@ -201,10 +283,14 @@ class MainFrame(wx.Frame):
     # ----------------------------------------------------------------- output
     def append_lines(self, lines, complete):
         if not lines and not complete:
-            return
+            return []
         out = self.output
-        pos = out.GetInsertionPoint()
-        at_end = pos >= out.GetLastPosition()
+        # While the player reads the output, the caret and selection stay
+        # exactly where they are; new text never drags them to the end.
+        reading = wx.Window.FindFocus() is out
+        sel = out.GetSelection()
+        base = out.GetLastPosition()
+        starts = []
         chunks = []
         for i, line in enumerate(lines):
             if i > 0:
@@ -212,6 +298,7 @@ class MainFrame(wx.Frame):
                 chunks.append("\n")
             cur = self.lines[-1]
             shift = len(cur[0])
+            starts.append(base + sum(len(c) for c in chunks))
             for l in line.links:
                 l.start += shift
                 l.end += shift
@@ -226,22 +313,22 @@ class MainFrame(wx.Frame):
             cut = sum(len(t) + 1 for t, _ in self.lines[:TRIM_LINES])
             del self.lines[:TRIM_LINES]
             out.Remove(0, cut)
-            pos = max(0, pos - cut)
-        if not at_end:
-            out.SetInsertionPoint(pos)
+            sel = (max(0, sel[0] - cut), max(0, sel[1] - cut))
+            starts = [max(0, x - cut) for x in starts]
+        if reading:
+            out.SetSelection(*sel)
+        return starts
 
     def notice(self, text, speak=True):
         """A line from the client itself, shown and spoken."""
         if self.lines[-1][0]:
             self.append_lines([], True)
-        from .markup import Line
         self.append_lines([Line(text, [])], True)
         self.SetStatusText(text)
         if speak and self.prefs.get("speech"):
             self.speech.say(text)
 
     def echo(self, text):
-        from .markup import Line
         if self.lines[-1][0] and not self.lines[-1][0].endswith(" "):
             self.append_lines([Line(" ", [])], False)
         self.append_lines([Line(text, [])], True)
@@ -262,20 +349,29 @@ class MainFrame(wx.Frame):
             # Never echoed, spoken, stored or replayed.
             self.conn.send_line(text)
             return
-        self.send_command(text)
+        if text.startswith("#"):
+            self.echo(text)
+            self.hash_command(text)
+        else:
+            self.send_command(text, expand=True)
         if text.strip() and (not self.history or self.history[-1] != text):
             self.history.append(text)
             del self.history[:-HISTORY_MAX]
         self.hist_pos = None
 
-    def send_command(self, text, echo_text=None):
+    def send_command(self, text, echo_text=None, expand=False):
         self.echo(echo_text if echo_text is not None else text)
+        if expand:
+            text = self.aliases.expand(text)
         if not self.conn.send_line(text):
             self.notice(self.tr("state.closed"))
 
     def on_input_key(self, event):
+        if self.run_macro(event):
+            return
         key = event.GetKeyCode()
         if key in (wx.WXK_UP, wx.WXK_DOWN) and not event.HasAnyModifiers():
+            self.keep_draft()
             if not self.history:
                 return
             if self.hist_pos is None:
@@ -283,14 +379,32 @@ class MainFrame(wx.Frame):
             self.hist_pos += -1 if key == wx.WXK_UP else 1
             self.hist_pos = max(0, min(len(self.history), self.hist_pos))
             value = self.history[self.hist_pos] if self.hist_pos < len(self.history) else ""
-            self.input.SetValue(value)
+            self.input.ChangeValue(value)
             self.input.SetInsertionPointEnd()
             return
         if key == wx.WXK_ESCAPE:
-            self.input.SetValue("")
+            self.keep_draft()
+            self.input.ChangeValue("")
             self.hist_pos = None
             return
         event.Skip()
+
+    def keep_draft(self):
+        """Put typed but unsent text into the history, so Up finds it again."""
+        text = self.input.GetValue()
+        if not text.strip():
+            return
+        if self.hist_pos is not None and self.hist_pos < len(self.history) and self.history[self.hist_pos] == text:
+            return
+        if text in self.history:
+            self.history.remove(text)
+        self.history.append(text)
+        del self.history[:-HISTORY_MAX]
+        if self.hist_pos is None:
+            # The draft is now the newest entry; Up goes on to the one before it.
+            self.hist_pos = len(self.history) - 1
+        else:
+            self.hist_pos = min(self.hist_pos, len(self.history) - 1)
 
     def set_password_mode(self, on):
         if on == self.password.IsShown():
@@ -313,6 +427,8 @@ class MainFrame(wx.Frame):
             self.output.SetInsertionPoint(self.output.GetLastPosition())
 
     def on_output_key(self, event):
+        if self.run_macro(event):
+            return
         key = event.GetKeyCode()
         if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) and not event.HasAnyModifiers():
             self.line_menu(always_menu=False)
@@ -328,6 +444,162 @@ class MainFrame(wx.Frame):
             target.WriteText(chr(code))
             return
         event.Skip()
+
+    # ------------------------------------------------- triggers, macros, hash
+    def reset_lists(self):
+        # A new socket or a login change: the lists belong to the old character.
+        self.triggers.reset()
+        self.macros.reset()
+        self.aliases.reset()
+
+    def run_triggers(self, lines, starts):
+        texts = [l.text for l in lines]
+        fired, highlights, notes = self.triggers.run(texts)
+        for i, a, b, mode, colour in highlights:
+            if i < len(starts):
+                self.highlight(starts[i] + a, starts[i] + b, mode, colour)
+        for pattern in notes:
+            self.notice(self.tr("tr.slow", pattern))
+        for trig, cmd, sound in fired:
+            if sound and sound.get("name"):
+                self.sound.play(sound["name"], {"V": sound.get("V", 100)})
+            if cmd:
+                ok = self.triggers.allow_command()
+                if ok == "paused":
+                    self.notice(self.tr("tr.flood"))
+                elif ok:
+                    self.conn.send_line(self.aliases.expand(cmd))
+
+    def highlight(self, start, end, mode, colour):
+        try:
+            c = wx.Colour(colour)
+        except Exception:
+            return
+        if not c.IsOk():
+            return
+        attr = wx.TextAttr()
+        if mode == "line":
+            bg = self.output.GetBackgroundColour()
+            attr.SetBackgroundColour(wx.Colour((c.Red() + 3 * bg.Red()) // 4, (c.Green() + 3 * bg.Green()) // 4,
+                                               (c.Blue() + 3 * bg.Blue()) // 4))
+        else:
+            attr.SetTextColour(c)
+        self.output.SetStyle(start, end, attr)
+
+    def run_macro(self, event):
+        if not self.macros.known:
+            return False
+        name = dialogs.key_from_event(event)
+        if not name:
+            return False
+        cmd = self.macros.command_for(name)
+        if cmd is None:
+            fallback = dialogs.key_fallback_from_event(event)
+            if fallback:
+                cmd = self.macros.command_for(fallback)
+        if cmd is None:
+            return False
+        line = expand_vars(cmd, self.vars)
+        self.send_command(line, expand=True)
+        return True
+
+    def hash_command(self, text):
+        body = text[1:].strip()
+        word, _, rest = body.partition(" ")
+        rest = rest.strip()
+        low = word.lower()
+        if word.isdigit():
+            n = min(int(word), 100)
+            for _ in range(n):
+                self.conn.send_line(self.aliases.expand(rest))
+            return
+        if low in ("var", "переменная", "змінна"):
+            return self.hash_var(rest)
+        if low in ("hotkey", "кнопка", "клавіша"):
+            return self.hash_hotkey(rest)
+        self.notice(self.tr("hash.unknown"))
+
+    def hash_var(self, rest):
+        parts = rest.split()
+        if not parts:
+            if not self.vars:
+                return self.notice(self.tr("hash.var.empty"))
+            return self.notice(self.tr("hash.var.list") + "\n" +
+                               "\n".join("    %s : %s" % kv for kv in sorted(self.vars.items())))
+        name = parts[0]
+        if len(parts) == 1:
+            if name in self.vars:
+                return self.notice("$%s : %s" % (name, self.vars[name]))
+            return self.notice(self.tr("hash.var.none"))
+        if len(parts) == 2 and parts[1] in ("delete", "удалить", "видалити"):
+            if self.vars.pop(name, None) is None:
+                return self.notice(self.tr("hash.var.none"))
+            return self.notice(self.tr("hash.var.deleted", name))
+        if not VAR_NAME.match(name):
+            return self.notice(self.tr("var.badname"))
+        self.vars[name] = " ".join(parts[1:])
+        self.notice(self.tr("hash.var.set", name, self.vars[name]))
+
+    def hash_hotkey(self, rest):
+        if not self.macros.known:
+            return self.notice(self.tr("hash.wait"))
+        parts = rest.split(None, 1)
+        if not parts:
+            rows = self.macros.all()
+            if not rows:
+                return self.notice(self.tr("hash.hotkey.empty"))
+            return self.notice(self.tr("hash.hotkey.list") + "\n" + "\n".join(
+                "    %s : %s (%s)" % (m["key"], m["cmd"], self.tr("scope." + sc)) for sc, m in rows))
+        key = canonical_key(parts[0])
+        arg = parts[1].strip() if len(parts) > 1 else ""
+        if arg in ("delete", "удалить", "видалити"):
+            found = False
+            for scope in ("char", "acct"):
+                lst = self.macros.lists[scope]
+                if any(m["key"] == key for m in lst):
+                    found = True
+                    self.macros.set_list(scope, [m for m in lst if m["key"] != key])
+            return self.notice(self.tr("hash.hotkey.deleted" if found else "hash.hotkey.none", key))
+        if not key:
+            return self.notice(self.tr("hash.hotkey.badkey", parts[0]))
+        if not arg:
+            rows = [(sc, m) for sc, m in self.macros.all() if m["key"].startswith(key)]
+            if not rows:
+                return self.notice(self.tr("hash.hotkey.none"))
+            return self.notice("\n".join("    %s : %s (%s)" % (m["key"], m["cmd"], self.tr("scope." + sc))
+                                         for sc, m in rows))
+        scope = "acct" if self.macros.account else "char"
+        lst = [m for m in self.macros.lists[scope] if m["key"] != key]
+        if len(lst) >= self.macros.max_items:
+            return self.notice(self.tr("list.full"))
+        self.macros.set_list(scope, lst + [{"key": key, "cmd": arg}])
+        self.notice(self.tr("hash.hotkey.set", key, arg))
+
+    def open_tool(self, which):
+        if which == "triggers":
+            dlg = dialogs.TriggersDialog(self, self.tr, self.triggers, self.sound)
+        elif which == "macros":
+            dlg = dialogs.MacrosDialog(self, self.tr, self.macros, lambda t: self.say(t))
+        elif which == "aliases":
+            dlg = dialogs.AliasesDialog(self, self.tr, self.aliases)
+        else:
+            dlg = dialogs.VarsDialog(self, self.tr, self.vars)
+        dlg.ShowModal()
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def open_settings(self):
+        dlg = dialogs.SettingsDialog(self, self.tr, self.conn.rpc, lambda t: self.say(t))
+        self.settings_dlg = dlg
+        if not self.conn.in_world or not self.conn.rpc("config_schema"):
+            dlg.set_waiting(self.tr("cfg.wait"))
+        else:
+            wx.CallLater(2500, lambda: dlg and not dlg.pages and dlg.set_waiting(self.tr("cfg.missing"))
+                         if self.settings_dlg is dlg else None)
+        dlg.ShowModal()
+        self.settings_dlg = None
+        dlg.Destroy()
+        self.input.SetFocus()
 
     # ----------------------------------------------------------------- links
     def line_menu(self, always_menu):
