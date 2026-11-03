@@ -89,6 +89,7 @@ class MainFrame(wx.Frame):
         self.history = list(self.prefs.get("history", []))[-HISTORY_MAX:]
         self.hist_pos = None
         self.hints = []
+        self.hint_lines = {}          # offered command -> the output line it was in
         self.hint_pos = None          # position while Down walks the offered commands
         self.completion = None        # Ctrl+Space state: what was typed and what matched
         self.prompt = {}
@@ -569,11 +570,13 @@ class MainFrame(wx.Frame):
     def hint_commands(self):
         """Commands offered in recent game text, newest first, each once."""
         out, seen = [], set()
+        self.hint_lines = {}
         for text, links in reversed(self.lines[-LINK_LIST_LINES:]):
             for l in reversed(links):
                 if l.command and not l.menu and not l.url and l.command not in seen:
                     seen.add(l.command)
                     out.append(l.command)
+                    self.hint_lines[l.command] = text.strip()
         return out
 
     def browse_hints(self, key):
@@ -607,7 +610,9 @@ class MainFrame(wx.Frame):
         value = self.hints[self.hint_pos]
         self.input.ChangeValue(value)
         self.input.SetInsertionPointEnd()
-        self.say(value)
+        # The command, then the line it came from, so a hint keeps its context.
+        line = self.hint_lines.get(value, "")
+        self.say(value + ". " + line if line and line != value else value)
         return True
 
     def auto_login(self, step):
