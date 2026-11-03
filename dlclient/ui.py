@@ -59,6 +59,7 @@ class MainFrame(wx.Frame):
         self.prompt = {}
         self.lang_answered = False
         self.lang_menu_waiting = False
+        self.nanny_password = False   # the login is asking for a password
 
         self._build()
         self._build_menu()
@@ -210,7 +211,12 @@ class MainFrame(wx.Frame):
     def on_frame(self, command, args):
         if command == "console_out" and args:
             self.on_console(str(args[0]))
+        elif command == "nanny_step":
+            step = args[0] if args else ""
+            self.nanny_password = step in ("password", "password_confirm")
+            self.set_password_mode(self.nanny_password or self.telnet.echo_off)
         elif command == "version":
+            self.nanny_password = False
             self.reset_lists()
             self.lang_answered = False
             self.lang_menu_waiting = False
@@ -226,6 +232,9 @@ class MainFrame(wx.Frame):
         elif command == "prompt" and args and isinstance(args[0], dict):
             self.prompt.update(args[0])
             self.update_status()
+            if self.nanny_password:
+                self.nanny_password = False
+                self.set_password_mode(self.telnet.echo_off)
             self.triggers.ask()
             self.macros.ask()
             self.aliases.ask()
@@ -263,7 +272,7 @@ class MainFrame(wx.Frame):
 
     def on_console(self, raw):
         text = self.telnet.process(raw)
-        self.set_password_mode(self.telnet.echo_off)
+        self.set_password_mode(self.telnet.echo_off or self.nanny_password)
         if not text:
             return
         if not self.lang_answered and "Choose your language" in text:
