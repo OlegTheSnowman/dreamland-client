@@ -810,3 +810,44 @@ class SettingsDialog(wx.Dialog):
     def on_changed(self, body):
         if isinstance(body, dict) and body.get("key"):
             self._show_value(body["key"], body.get("value"))
+
+
+# ------------------------------------------------------------- auto login
+class AutoLoginDialog(wx.Dialog):
+    """Character name and password for logging in by itself.
+
+    The password goes to Windows Credential Manager, never to the settings
+    file. Left empty, the password field keeps the one already saved.
+    """
+
+    def __init__(self, parent, tr, enabled, name, has_password):
+        super().__init__(parent, title=tr("al2.title"), size=wx.Size(520, 330))
+        self.tr = tr
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.enabled = wx.CheckBox(self, label=tr("al2.enabled"))
+        self.enabled.SetValue(enabled)
+        s.Add(self.enabled, 0, wx.ALL, 6)
+        self.name = labelled(self, s, tr("al2.name"), wx.TextCtrl(self, value=name or ""))
+        self.password = labelled(self, s, tr("al2.saved") if has_password else tr("al2.password"),
+                                 wx.TextCtrl(self, style=wx.TE_PASSWORD))
+        self.forget = wx.Button(self, label=tr("al2.forget"))
+        self.forget.Bind(wx.EVT_BUTTON, self.on_forget)
+        s.Add(self.forget, 0, wx.ALL, 6)
+        ok = ok_cancel(self, s, tr)
+        ok.Bind(wx.EVT_BUTTON, self.on_ok)
+        self.SetSizer(s)
+        self.forgotten = False
+        self.enabled.SetFocus()
+
+    def on_forget(self, event):
+        self.forgotten = True
+        self.enabled.SetValue(False)
+        self.password.SetValue("")
+        message(self, self.tr("al2.forgotten"), self.tr("al2.title"))
+
+    def on_ok(self, event):
+        if self.enabled.GetValue() and not self.name.GetValue().strip():
+            message(self, self.tr("al2.needname"), self.tr("al2.title"))
+            self.name.SetFocus()
+            return
+        self.EndModal(wx.ID_OK)

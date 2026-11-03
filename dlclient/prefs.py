@@ -7,6 +7,7 @@ DEFAULTS = {
     "lang": "en",
     "speech": True,
     "echo": True,
+    "autologin": {"enabled": False, "name": ""},
     "default_keys": True,
     "sound": {
         "mute": False,

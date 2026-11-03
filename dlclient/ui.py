@@ -15,6 +15,7 @@ from . import dialogs
 from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
+from . import creds
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
 from .speech import Speech
@@ -90,6 +91,7 @@ class MainFrame(wx.Frame):
         self.lang_answered = False
         self.lang_menu_waiting = False
         self.nanny_password = False   # the login is asking for a password
+        self.auto_sent = set()        # login steps answered for this connection
 
         self._build()
         self._build_menu()
@@ -136,6 +138,7 @@ class MainFrame(wx.Frame):
         game = wx.Menu()
         self._item(game, tr("menu.connect"), lambda e: self.connect())
         self._item(game, tr("menu.disconnect"), lambda e: self.conn.disconnect())
+        self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
         game.AppendSeparator()
         self._item(game, tr("menu.links"), lambda e: self.show_links())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
@@ -279,9 +282,11 @@ class MainFrame(wx.Frame):
             self.on_console(str(args[0]))
         elif command == "nanny_step":
             step = args[0] if args else ""
+            self.auto_login(step)
             self.nanny_password = step in ("password", "password_confirm")
             self.set_password_mode(self.nanny_password or self.telnet.echo_off)
         elif command == "version":
+            self.auto_sent = set()
             self.nanny_password = False
             self.reset_lists()
             self.lang_answered = False
@@ -570,6 +575,42 @@ class MainFrame(wx.Frame):
         self.input.SetInsertionPointEnd()
         self.say(value)
         return True
+
+    def auto_login(self, step):
+        """Answer the name and password questions once per connection."""
+        al = self.prefs.get("autologin") or {}
+        name = (al.get("name") or "").strip()
+        if not al.get("enabled") or not name or step in self.auto_sent:
+            return
+        if step == "name":
+            self.auto_sent.add(step)
+            self.notice(self.tr("al2.as", name))
+            self.conn.send_line(name)
+        elif step == "password" and "name" in self.auto_sent:
+            password = creds.load(name)
+            if password:
+                self.auto_sent.add(step)
+                self.conn.send_line(password)
+
+    def open_autologin(self):
+        al = self.prefs.setdefault("autologin", {"enabled": False, "name": ""})
+        dlg = dialogs.AutoLoginDialog(self, self.tr, bool(al.get("enabled")), al.get("name", ""),
+                                      bool(creds.load(al.get("name", ""))))
+        if dlg.ShowModal() == wx.ID_OK:
+            old = al.get("name", "")
+            name = dlg.name.GetValue().strip()
+            if dlg.forgotten or (old and old.lower() != name.lower()):
+                creds.delete(old)
+            if dlg.password.GetValue():
+                creds.save(name, dlg.password.GetValue())
+            al["name"] = name
+            al["enabled"] = dlg.enabled.GetValue() and bool(creds.load(name))
+            if not os.environ.get("DLCLIENT_QUIET"):
+                prefs_mod.save(self.prefs)
+            self.say(self.tr("al2.on", name) if al["enabled"] else self.tr("al2.off"))
+        dlg.password.SetValue("")
+        dlg.Destroy()
+        self.input.SetFocus()
 
     def keep_draft(self):
         """Put typed but unsent text into the history, so Up finds it again."""
