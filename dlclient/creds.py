@@ -1,10 +1,3 @@
-"""The auto-login password, kept in Windows Credential Manager.
-
-Credential Manager encrypts it for the Windows user, the same store browsers
-and Git use, so it never sits in the client's settings file. Plain ctypes, no
-extra package.
-"""
-
 import ctypes
 import ctypes.wintypes as wt
 
@@ -36,7 +29,7 @@ try:
     _adv.CredReadW.argtypes = [wt.LPCWSTR, wt.DWORD, wt.DWORD, ctypes.POINTER(ctypes.POINTER(CREDENTIAL))]
     _adv.CredDeleteW.argtypes = [wt.LPCWSTR, wt.DWORD, wt.DWORD]
     _adv.CredFree.argtypes = [ctypes.c_void_p]
-except (AttributeError, OSError):  # not Windows
+except (AttributeError, OSError):
     _adv = None
 
 

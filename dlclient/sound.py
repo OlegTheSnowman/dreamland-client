@@ -1,13 +1,3 @@
-"""MUD Sound Protocol player, after mudjs src/sound.js.
-
-Sounds come only from the bundled library (sounds/manifest.json). A name is a
-path without extension and may hold * and ? wildcards; several matches pick one
-at random. A U= download URL from the server is ignored on purpose.
-
-Effects share one channel with MSP priority: a new sound stops the playing one
-only if its priority is strictly higher. Music has its own channel.
-"""
-
 import fnmatch
 import json
 import os
@@ -21,7 +11,7 @@ SAFE_FILE = re.compile(r"^[a-z0-9_-]+/[a-z0-9_.-]+\.(mp3|ogg|wav)$", re.I)
 try:
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     import pygame
-except ImportError:  # sound is optional
+except ImportError:
     pygame = None
 
 TYPES = ["combat", "alert", "chat", "ui", "ambient", "music"]
@@ -36,15 +26,15 @@ def _int(v, lo, hi, default):
 
 class SoundPlayer:
     def __init__(self, folder, prefs, live_folder=None):
-        self.folder = folder            # sounds shipped with the client
-        self.live_folder = live_folder  # sounds fetched from the web client
-        self.prefs = prefs          # dict: mute, master, types{}
+        self.folder = folder
+        self.live_folder = live_folder
+        self.prefs = prefs
         self.library = []
         self.cache = {}
-        self.effect = None          # (channel, priority)
+        self.effect = None
         self.music_name = None
         self.ok = False
-        self.on_missing = None      # called with (kind, name, opts) for a sound not in the library
+        self.on_missing = None
         self.reload()
         if pygame:
             try:
@@ -58,7 +48,6 @@ class SoundPlayer:
                 self.ok = False
 
     def reload(self):
-        """Use the newest manifest: the web client's when fetched, else the bundled one."""
         for folder in (self.live_folder, self.folder):
             if not folder:
                 continue
@@ -170,7 +159,6 @@ class SoundPlayer:
         self.music_name = name
 
     def preview(self, name):
-        """Play a library sound by exact name, for the sound picker."""
         if not self.ok:
             return
         entry = next((s for s in self.library if s["name"] == name), None)
@@ -186,13 +174,6 @@ class SoundPlayer:
 
 
 def fetch_live_library(live_folder, bundled_folder, timeout=15):
-    """Bring the sound library up to the web client's, into live_folder.
-
-    Only names listed in the web client's manifest are fetched, only from
-    dreamland.rocks, and only as audio files under a type folder. A file the
-    client already has (bundled or fetched before) is not downloaded again.
-    Returns True when the manifest was saved.
-    """
     req = urllib.request.Request(LIVE_BASE + "manifest.json", headers={"User-Agent": "DreamLand desktop client"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read(2_000_000)
@@ -223,12 +204,6 @@ def fetch_live_library(live_folder, bundled_folder, timeout=15):
 
 
 def fetch_from_url(url, live_folder, timeout=15):
-    """An MSP U= download, only from dreamland.rocks over https.
-
-    The file lands under live_folder/server/<name>, and an entry for it is
-    added to the live manifest so the next request by the same name plays.
-    Returns the library name, or None when the address is not allowed.
-    """
     from urllib.parse import urlparse
     u = urlparse(url)
     if u.scheme != "https" or u.hostname not in ("dreamland.rocks", "www.dreamland.rocks"):

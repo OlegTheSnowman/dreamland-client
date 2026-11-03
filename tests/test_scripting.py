@@ -4,7 +4,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dlclient import scripting as s  # noqa: E402
+from dlclient import scripting as s
 
 
 class Later:

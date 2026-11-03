@@ -1,19 +1,3 @@
-"""The web client's player script, run as the web client runs it.
-
-mudjs keeps one JavaScript script per player: the stock defaults.js until the
-player edits it, then the player's own copy, kept on the game server for the
-account (script_get / script_data). The web client runs it with seven names in
-scope (mudjs src/settings.js applySettings): keydown, notify, send, echo, $,
-mudprompt and autobuff. The script defines keydown for keys no macro took, and
-hangs handlers on $('.trigger') for game text ('text') and typed lines
-('input'). This module does the same in QuickJS, with no browser around it, so
-the keypad, the script's own aliases and its triggers work here as there.
-
-The script runs in an engine with no files, no network and a time limit on
-every call. $ is a stand-in for the few jQuery calls player scripts make; the
-rest of the page does not exist here and those calls do nothing.
-"""
-
 import base64
 import json
 import os
@@ -21,14 +5,13 @@ import urllib.request
 
 try:
     import quickjs
-except ImportError:  # the client still runs, without the script
+except ImportError:
     quickjs = None
 
 STOCK_URL = "https://dreamland.rocks/play/defaults.js"
 CALL_SECONDS = 0.5
 MEMORY = 32 * 1024 * 1024
 
-# Browser-side helpers the script expects. Kept small and plain on purpose.
 PRELUDE = r"""
 var __h = { text: [], input: [] };
 var __out = [];
@@ -99,7 +82,6 @@ function __prompt(json) {
 }
 """
 
-# The script body runs inside a function, as in mudjs, and hands keydown back.
 WRAP = "(function () {\n%s\n;return keydown;\n})()"
 
 
@@ -108,9 +90,9 @@ class ScriptHost:
         self.cb = dict(send=send, echo=echo, notify=notify, autobuff=autobuff,
                        get_input=get_input, set_input=set_input, error=error)
         self.cache_dir = cache_dir
-        self.bundled = bundled          # path to the defaults.js shipped with the client
+        self.bundled = bundled
         self.ctx = None
-        self.source = None              # "stock" or "account"
+        self.source = None
         self.text = ""
         self.errors = 0
 
@@ -118,9 +100,7 @@ class ScriptHost:
     def available(self):
         return quickjs is not None
 
-    # --------------------------------------------------------------- source
     def stock_text(self):
-        """The stock script: the copy fetched from the web client, else the bundled one."""
         for path in (os.path.join(self.cache_dir, "defaults.js"), self.bundled):
             try:
                 with open(path, encoding="utf-8") as f:
@@ -130,7 +110,6 @@ class ScriptHost:
         return ""
 
     def fetch_stock(self, timeout=15):
-        """Bring the stock script up to the web client's. Runs off the UI thread."""
         req = urllib.request.Request(STOCK_URL, headers={"User-Agent": "DreamLand desktop client"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             body = r.read(1_000_000).decode("utf-8")
@@ -142,7 +121,6 @@ class ScriptHost:
         return body
 
     def on_script_data(self, data):
-        """The account's copy from the server; an empty one means the stock script."""
         if not isinstance(data, dict):
             return
         text = ""
@@ -156,21 +134,18 @@ class ScriptHost:
         elif self.source != "stock":
             self.load(self.stock_text(), "stock")
 
-    # ------------------------------------------------------------------ run
     def load(self, text, source):
         if not self.available:
             return False
         ctx = quickjs.Context()
         ctx.set_memory_limit(MEMORY)
         ctx.set_time_limit(CALL_SECONDS)
-        # The engine refuses calls into Python under a time limit, so the
-        # script queues what it wants done and we carry it out after each call.
         try:
             ctx.eval(PRELUDE)
             kd = ctx.eval(WRAP % text)
             if kd is not None:
                 ctx.set("keydown", kd)
-        except Exception as e:  # a broken script: say so, keep the old one
+        except Exception as e:
             self._error(str(e), loud=True)
             return False
         self.ctx, self.text, self.source = ctx, text, source
@@ -191,9 +166,6 @@ class ScriptHost:
                 self.cb["autobuff"]()
 
     def _error(self, msg, loud=False):
-        # A script that will not load is reported. A handler failing on some
-        # line of text is not: the web client only logs those to its console,
-        # and the stock script trips on fields the prompt does not always carry.
         self.errors += 1
         if loud:
             self.cb["error"](msg.splitlines()[0] if msg else "")
@@ -214,11 +186,9 @@ class ScriptHost:
         self._call("__text", line)
 
     def on_input(self, line):
-        """True when the script handled the typed line itself (do not send it)."""
         return bool(self._call("__input", line))
 
     def on_key(self, which, code, ctrl, alt, shift):
-        """True when the script's keydown took the key."""
         if not self.ctx:
             return False
         ev = {"which": which, "code": code, "ctrlKey": ctrl, "altKey": alt, "shiftKey": shift,

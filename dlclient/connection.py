@@ -1,11 +1,3 @@
-"""The WebSocket line to the game, on its own thread.
-
-Frames are JSON: {"command": name, "args": [...]}. We send console_in for
-typed lines, ping to keep the line warm while in the world, and resume to come
-back into the same character after a dropped connection. Every received frame
-is handed to on_frame(command, args) on this thread; the UI marshals it.
-"""
-
 import json
 import threading
 import time
@@ -20,19 +12,18 @@ RECONNECT_MAX = 15
 
 class Connection:
     def __init__(self, on_frame, on_state):
-        self.on_frame = on_frame      # (command, args)
-        self.on_state = on_state      # ("connecting"|"open"|"closed"|"reconnecting", detail)
+        self.on_frame = on_frame
+        self.on_state = on_state
         self.ws = None
         self.thread = None
         self.resume_token = None
         self.in_world = False
-        self.resume_pending = False   # a resume was asked for and not yet answered
-        self.wanted = False           # False after the player disconnects on purpose
+        self.resume_pending = False
+        self.wanted = False
         self.lock = threading.Lock()
         self._last_ping = 0
         self._retries = 0
 
-    # -- public ---------------------------------------------------------
     def connect(self):
         self.wanted = True
         self._retries = 0
@@ -70,7 +61,6 @@ class Connection:
         ws = self.ws
         return bool(ws and ws.sock and ws.sock.connected)
 
-    # -- thread ---------------------------------------------------------
     def _run(self):
         delay = 0
         while self.wanted:
@@ -88,8 +78,6 @@ class Connection:
             self.ws = None
             if not self.wanted:
                 break
-            # Without a resume token there is no body to come back to: stop and
-            # let the player decide.
             if not self.resume_token:
                 break
             self._retries += 1
@@ -111,9 +99,6 @@ class Connection:
         threading.Thread(target=self._keepalive, args=(ws,), daemon=True).start()
 
     def _answer_codepage(self):
-        # The server's first, unseen question is the codepage; 1 is KOI8-R,
-        # the one the web protocol and our telnet decoding expect (mudjs
-        # websock.js answerFreshSocket). The language menu comes after it.
         self.send_line("1")
 
     def _keepalive(self, ws):
@@ -155,6 +140,5 @@ class Connection:
                 return
             self.resume_token = None
             self.resume_pending = False
-            # Back at the start of a login: the codepage question is waiting.
             self._answer_codepage()
         self.on_frame(command, args)

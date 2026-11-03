@@ -5,8 +5,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dlclient.markup import OutputParser  # noqa: E402
-from dlclient.telnet import Telnet, IAC, WILL, WONT, ECHO  # noqa: E402
+from dlclient.markup import OutputParser
+from dlclient.telnet import Telnet, IAC, WILL, WONT, ECHO
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -38,7 +38,7 @@ class ParserTest(unittest.TestCase):
         line = [l for l in lines if "english" in l.text][0]
         link = line.links[0]
         self.assertEqual(line.text[link.start:link.end], "english")
-        self.assertFalse(complete)  # ends with the "> " prompt
+        self.assertFalse(complete)
 
     def test_entities_and_colour(self):
         lines, complete, _ = self.parse("<c c='fgbr'>&gt;</c> a &amp; b &lt;x&gt;\n")

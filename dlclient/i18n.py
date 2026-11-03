@@ -1,12 +1,5 @@
-"""Interface strings in English, Ukrainian and Russian.
-
-Language codes follow the game: en, ua, ru. The same choice answers the game's
-"Choose your language" menu, so the game text and the client match.
-"""
-
 LANGS = [("en", "English"), ("ua", "Українська"), ("ru", "Русский")]
 
-# Number of each language in the game's own menu.
 GAME_MENU_CHOICE = {"en": "1", "ua": "2", "ru": "3"}
 
 STRINGS = {
@@ -238,7 +231,7 @@ STRINGS = {
 }
 
 
-from .i18n_tools import TOOLS  # noqa: E402
+from .i18n_tools import TOOLS
 
 for _lang, _strings in TOOLS.items():
     STRINGS[_lang].update(_strings)

@@ -1,9 +1,3 @@
-"""Windows for triggers, key macros, aliases, variables and game settings.
-
-Every window is plain wx controls with a visible label in front of each one,
-so a screen reader names every field.
-"""
-
 import html
 import re
 import time
@@ -50,10 +44,7 @@ def message(parent, text, title):
     wx.MessageBox(text, title, wx.OK | wx.ICON_INFORMATION, parent)
 
 
-# ------------------------------------------------------------ list manager
 class ListManager(wx.Dialog):
-    """A list with Add, Edit and Delete. Subclasses fill in the specifics."""
-
     title_key = list_key = ""
 
     def __init__(self, parent, tr):
@@ -112,7 +103,6 @@ class ListManager(wx.Dialog):
     def scope_name(self, scope):
         return self.tr("scope." + scope)
 
-    # Subclasses
     def ready(self):
         return True
 
@@ -139,7 +129,6 @@ def scope_choice(dlg, sizer, tr, store_has_account, current):
     return ch, scopes
 
 
-# --------------------------------------------------------------- triggers
 class TriggerEdit(wx.Dialog):
     def __init__(self, parent, tr, sound, trig, scope, has_account):
         super().__init__(parent, title=tr("tr.edit"), size=wx.Size(600, 620),
@@ -277,10 +266,7 @@ class TriggersDialog(ListManager):
             self.refresh()
 
 
-# ----------------------------------------------------------------- macros
 class KeyCapture(wx.TextCtrl):
-    """A read-only field that takes the name of the next key combination pressed."""
-
     def __init__(self, parent, tr, value, say):
         super().__init__(parent, value=value or tr("mc.key.none"), style=wx.TE_READONLY)
         self.tr, self.key, self.say = tr, value or "", say
@@ -311,7 +297,6 @@ def _numpad_table():
         return _NUMPAD
     for i in range(10):
         _NUMPAD[getattr(wx, "WXK_NUMPAD%d" % i)] = "kp%d" % i
-    # NumLock off: the keypad reports its second meaning, still the same key.
     for code, name in (("WXK_NUMPAD_INSERT", "kp0"), ("WXK_NUMPAD_END", "kp1"), ("WXK_NUMPAD_DOWN", "kp2"),
                        ("WXK_NUMPAD_PAGEDOWN", "kp3"), ("WXK_NUMPAD_LEFT", "kp4"), ("WXK_NUMPAD_BEGIN", "kp5"),
                        ("WXK_NUMPAD_RIGHT", "kp6"), ("WXK_NUMPAD_HOME", "kp7"), ("WXK_NUMPAD_UP", "kp8"),
@@ -323,7 +308,6 @@ def _numpad_table():
 
 
 def key_from_event(event):
-    """mudjs-style key name for a wx key event, or None (bare modifiers, unknown keys)."""
     if event.MetaDown():
         return None
     code = event.GetKeyCode()
@@ -335,7 +319,6 @@ def key_from_event(event):
 
 
 def key_fallback_from_event(event):
-    """For a keypad press, the name an older macro on the arrow would have used."""
     numpad = _numpad_table().get(event.GetKeyCode())
     if not numpad:
         return None
@@ -415,7 +398,6 @@ class MacrosDialog(ListManager):
             self.refresh()
 
 
-# ---------------------------------------------------------------- aliases
 class AliasEdit(wx.Dialog):
     def __init__(self, parent, tr, alias, scope, has_account):
         super().__init__(parent, title=tr("al.edit"), size=wx.Size(560, 330))
@@ -472,7 +454,6 @@ class AliasesDialog(ListManager):
             else:
                 lst = [x for x in self.store.acct if x is not alias and x["name"] != new["name"]]
                 self.store.set_acct(lst + [new])
-            # The character's list comes back from the server a moment later.
             wx.CallLater(800, self.refresh)
             self.refresh()
         dlg.Destroy()
@@ -498,7 +479,6 @@ class AliasesDialog(ListManager):
         self.refresh()
 
 
-# -------------------------------------------------------------- variables
 class VarEdit(wx.Dialog):
     def __init__(self, parent, tr, name, value):
         super().__init__(parent, title=tr("var.edit"), size=wx.Size(500, 260))
@@ -558,14 +538,7 @@ class VarsDialog(ListManager):
             self.refresh()
 
 
-# ---------------------------------------------------------- game settings
 class SettingsDialog(wx.Dialog):
-    """Built from the server's config_schema, like the web client's settings window.
-
-    Pages are in a list; picking one fills the panel with its options. A change
-    goes to the server at once as config_set and the field follows the answer.
-    """
-
     def __init__(self, parent, tr, rpc, say):
         super().__init__(parent, title=tr("cfg.title"), size=wx.Size(820, 600),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
@@ -624,13 +597,6 @@ class SettingsDialog(wx.Dialog):
         self.panel.Layout()
 
     def _add_option(self, s, opt):
-        """One setting, drawn like a row of the web client's settings window.
-
-        Every control is named with the setting and what it is now, the same
-        sentence the web client shows beside it, and describes itself with the
-        hint, the longer help and the examples. A visible line under it shows
-        the status for sighted players.
-        """
         key, kind = opt.get("key"), opt.get("type")
         if not key or kind not in ("bool", "enum", "int", "string", "account"):
             return
@@ -697,8 +663,7 @@ class SettingsDialog(wx.Dialog):
             row["main"] = c
             if opt.get("placeholder"):
                 row["range"] = self.tr("cfg.example", opt["placeholder"])
-        else:  # account: a linked service, changed through an action button
-            # The secret word shows up here once asked for, ready to copy.
+        else:
             c = wx.TextCtrl(p, style=wx.TE_READONLY)
             s.Add(c, 0, wx.EXPAND | wx.ALL, 6)
             row["main"] = c
@@ -722,7 +687,6 @@ class SettingsDialog(wx.Dialog):
         self._show_value(key, value)
 
     def long_help(self, opt):
-        """Hint, help and examples as plain text, for the description NVDA reads."""
         parts = [opt.get("hint") or "", opt.get("help") or ""]
         for ex in opt.get("examples") or []:
             text = re.sub(r"<[^>]+>", "", str(ex.get("text") or ""))
@@ -730,7 +694,6 @@ class SettingsDialog(wx.Dialog):
         return "\n".join(x for x in parts if x)
 
     def describe(self, opt, value):
-        """What the game says the setting is now (mudjs OptionRow describe)."""
         kind = opt.get("type")
         hint = opt.get("hint") or ""
         if kind == "bool":
@@ -787,7 +750,6 @@ class SettingsDialog(wx.Dialog):
             c.ChangeValue(("/link " + token) if token else "")
         status = self.describe(opt, value)
         row["status"].SetLabel(status)
-        # The name carries the current state, so Tab onto it says everything.
         name = row["label"]
         if row.get("range"):
             name += ", " + row["range"]
@@ -804,7 +766,6 @@ class SettingsDialog(wx.Dialog):
         if body.get("ok"):
             self._show_value(body["key"], body.get("value"))
         else:
-            # Put the field back where the server has it, then say why.
             self._show_value(body["key"], self.values.get(body["key"]))
             self.say(self.tr("cfg.refused", body.get("reason") or body.get("error") or ""))
 
@@ -813,14 +774,7 @@ class SettingsDialog(wx.Dialog):
             self._show_value(body["key"], body.get("value"))
 
 
-# ------------------------------------------------------------- auto login
 class AutoLoginDialog(wx.Dialog):
-    """Character name and password for logging in by itself.
-
-    The password goes to Windows Credential Manager, never to the settings
-    file. Left empty, the password field keeps the one already saved.
-    """
-
     def __init__(self, parent, tr, enabled, name, has_password):
         super().__init__(parent, title=tr("al2.title"), size=wx.Size(520, 330))
         self.tr = tr
@@ -854,10 +808,7 @@ class AutoLoginDialog(wx.Dialog):
         self.EndModal(wx.ID_OK)
 
 
-# ------------------------------------------------------------ chat history
 class ChatDialog(wx.Dialog):
-    """One chat buffer as a list, to review and copy from."""
-
     def __init__(self, parent, tr, store, buffer_label):
         super().__init__(parent, title=tr("chat.title"), size=wx.Size(760, 520),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
@@ -905,14 +856,7 @@ class ChatDialog(wx.Dialog):
         event.Skip()
 
 
-# --------------------------------------------------------- rooms of an area
 class RoomsDialog(wx.Dialog):
-    """Every room of the current area by name, from the web client's map.
-
-    Typing in the search field narrows the list. Walk there sends 'path' and
-    runs the route the game answers with; Show route only asks for it.
-    """
-
     WALK, ROUTE = 101, 102
 
     def __init__(self, parent, tr, rooms):
@@ -947,7 +891,6 @@ class RoomsDialog(wx.Dialog):
         self.list.SetSelection(0)
 
     def on_search_key(self, event):
-        # Down from the search field goes straight into the list.
         if event.GetKeyCode() == wx.WXK_DOWN and self.shown:
             self.list.SetFocus()
             return

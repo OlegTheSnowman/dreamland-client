@@ -1,15 +1,3 @@
-"""Chat buffers: the channel messages the server sends apart from the game text.
-
-After chat_subscribe the server sends every channel line again as a 'chat'
-frame (plug-ins/output/chatframe.cpp): the channel id (ooc, gossip, cb...),
-its kind (world, personal, group, room, mob), whether it came in or went out,
-and the text exactly as the console printed it. The web client keeps them in
-its chat panel; here they go into buffers the player walks with the keyboard.
-
-History is kept per character, on this computer, one JSON line per message in
-%APPDATA%\\DreamLandClient\\chat\\<name>.jsonl, like the web client's archive.
-"""
-
 import json
 import os
 import re
@@ -21,7 +9,6 @@ KIND_BUFFERS = {"personal": "tells", "group": "group", "room": "room", "mob": "m
 
 
 def buffer_of(row):
-    """The buffer a message belongs to besides 'all'."""
     kind = row.get("kind") or "world"
     if kind in KIND_BUFFERS:
         return KIND_BUFFERS[kind]
@@ -31,12 +18,12 @@ def buffer_of(row):
 class ChatStore:
     def __init__(self, folder, to_text):
         self.folder = folder
-        self.to_text = to_text        # markup -> plain text, the console's parser
+        self.to_text = to_text
         self.who = None
-        self.rows = []                # oldest first
-        self.order = [ALL]            # buffers in the order they first appeared
+        self.rows = []
+        self.order = [ALL]
         self.current = ALL
-        self.pos = {}                 # buffer -> index into its rows, None = past the newest
+        self.pos = {}
 
     def _path(self, who):
         safe = re.sub(r"[^\w-]", "_", who.lower())
@@ -72,7 +59,6 @@ class ChatStore:
             self.order.append(b)
 
     def add(self, body):
-        """A chat frame. Returns the stored row, or None when no one is playing."""
         if not self.who or not isinstance(body, dict):
             return None
         peer = body.get("peer") or {}
@@ -105,7 +91,6 @@ class ChatStore:
         return self.current
 
     def move(self, step):
-        """Walk the current buffer. Returns (row, edge) where edge is 'top', 'end' or None."""
         rows = self.buffer_rows()
         if not rows:
             return None, "empty"

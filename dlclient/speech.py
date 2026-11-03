@@ -1,13 +1,6 @@
-"""Speak through the running screen reader (NVDA, JAWS, and others).
-
-accessible_output2 finds the active screen reader and talks to it directly, so
-new game text is read without moving focus. With no screen reader running it
-falls back to SAPI, which is why speech can be switched off.
-"""
-
 try:
     from accessible_output2.outputs.auto import Auto
-except Exception:  # pragma: no cover - optional
+except Exception:
     Auto = None
 
 

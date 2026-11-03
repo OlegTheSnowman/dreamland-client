@@ -1,12 +1,3 @@
-"""Room lists from the web client's area maps.
-
-The web client draws its map from https://dreamland.rocks/maps/graph/area-<file>.json
-(mudjs src/components/mapper/useGraphMapper.js), one file per area, named after
-the area file the prompt reports ("newthalos.are" -> "newthalos"). Each room has
-its number, its name in Russian and an i18n block with English and Ukrainian.
-Here the same file becomes a list of rooms to walk to with 'path <number>'.
-"""
-
 import json
 import re
 import urllib.error
@@ -17,7 +8,7 @@ COLOUR = re.compile(r"\{.")
 
 
 class NoMap(Exception):
-    """The area has no public map (hidden areas such as Moehewa)."""
+    pass
 
 
 def area_key(area_file):
@@ -25,7 +16,6 @@ def area_key(area_file):
 
 
 def fetch_rooms(area_file, lang, timeout=15):
-    """[(vnum, name)] for an area, sorted by name, in the player's language."""
     key = area_key(area_file)
     if not key or not re.fullmatch(r"[a-z0-9_-]+", key):
         raise NoMap(key)
@@ -36,7 +26,7 @@ def fetch_rooms(area_file, lang, timeout=15):
             data = json.loads(r.read(10_000_000).decode("utf-8"))
     except urllib.error.HTTPError as e:
         raise NoMap(key) from e
-    except ValueError as e:  # the site answers missing maps with a page, not JSON
+    except ValueError as e:
         raise NoMap(key) from e
     rooms = data.get("rooms") or {}
     items = rooms.values() if isinstance(rooms, dict) else rooms

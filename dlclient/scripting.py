@@ -1,17 +1,3 @@
-"""Triggers, key macros, aliases and variables, kept in step with the web client.
-
-Triggers and macros live on the game server in two lists, the character's own
-and the account's, as opaque base64 blobs of JSON (mudjs src/triggers.js and
-src/macros.js). The character's aliases are the game's own alias list; the
-account's aliases are a blob like the others and are expanded here before a
-line is sent (mudjs src/aliases.js). Using the same blobs means a trigger made
-in either client shows up in the other.
-
-Nothing in this module touches wx. Callers pass rpc(command, *args) to talk to
-the server and later(seconds, fn) to run something after a delay on the UI
-thread.
-"""
-
 import base64
 import json
 import re
@@ -55,8 +41,6 @@ def new_id():
 
 
 class SyncedLists:
-    """Two server-side lists (char, acct) saved shortly after each change."""
-
     get_cmd = put_cmd = data_cmd = saved_cmd = ""
     max_items = 200
 
@@ -144,15 +128,12 @@ class SyncedLists:
         return [(scope, x) for scope in SCOPES for x in self.lists[scope]]
 
 
-# ----------------------------------------------------------------- triggers
 def compile_trigger(trig):
-    """A compiled regex for a trigger, or None when it has none."""
     pattern = trig.get("pattern") or ""
     if not pattern:
         return None
     try:
         if trig.get("regex"):
-            # JavaScript names groups (?<name>...), Python (?P<name>...).
             return re.compile(re.sub(r"\(\?<(?![=!])", "(?P<", pattern))
         parts = re.split(r"(%[1-9])", pattern)
         out = []
@@ -216,12 +197,6 @@ class Triggers(SyncedLists):
         super().changed()
 
     def run(self, lines):
-        """Match one block of output lines.
-
-        Returns (fired, highlights, notes): fired is [(trigger, command or "", sound)],
-        highlights is [(line_index, start, end, mode, colour)], notes are messages
-        about triggers switched off for being too slow.
-        """
         fired, highlights, notes = [], [], []
         if not self.compiled:
             return fired, highlights, notes
@@ -255,7 +230,6 @@ class Triggers(SyncedLists):
         return fired, highlights, notes
 
     def allow_command(self):
-        """Flood guard for commands sent by triggers. Returns True, False, or 'paused'."""
         now = time.time()
         if now < self.flood_until:
             return False
@@ -268,7 +242,6 @@ class Triggers(SyncedLists):
         return True
 
 
-# ------------------------------------------------------------------- macros
 class Macros(SyncedLists):
     get_cmd, put_cmd, data_cmd, saved_cmd = "macros_get", "macros_put", "macros_data", "macros_saved"
     max_items = MAX_MACROS
@@ -284,7 +257,6 @@ class Macros(SyncedLists):
         return None
 
 
-# ------------------------------------------------------------------ aliases
 class Aliases:
     def __init__(self, rpc, send_line, later, on_change=None):
         self.rpc = rpc
@@ -298,7 +270,7 @@ class Aliases:
         self.max = 1000
         self.account = False
         self.acct_known = False
-        self.char = []    # [{"name", "body"}]
+        self.char = []
         self.acct = []
         self.status = "idle"
         self.dirty = False
@@ -358,7 +330,6 @@ class Aliases:
             return "flush"
         return ""
 
-    # The character's list is the game's own: change it with game commands.
     def set_char(self, old_name, name, body):
         if old_name and old_name != name:
             self.send_line("unalias " + old_name)
@@ -393,7 +364,6 @@ class Aliases:
         self.on_change()
 
     def expand(self, line):
-        """Expand account aliases in a line, the way the game expands its own."""
         if not self.acct or line is None:
             return line
         pieces, cur, i = [], "", 0
@@ -428,12 +398,10 @@ class Aliases:
         return hit["body"] + (" " + rest if rest else "")
 
 
-# ---------------------------------------------------------------- variables
 VAR_NAME = re.compile(r"^[a-zA-Zа-яА-ЯёЁіІїЇєЄґҐ][\wа-яА-ЯёЁіІїЇєЄґҐ]*$")
 
 
 def expand_vars(text, variables):
-    """Put #var values in place of $name, as mudjs parseUserVars does."""
     if "$" not in text or not variables:
         return text
     return re.sub(r"\$([\wа-яА-ЯёЁіІїЇєЄґҐ]+)",
@@ -441,9 +409,6 @@ def expand_vars(text, variables):
                   text)
 
 
-# ---------------------------------------------------------------- key names
-# Names follow mudjs keycode.js, so a macro made in the browser fires here:
-# modifiers in the order ctrl, alt, shift, then the key: "f1", "alt+kp2".
 _VK_NAMES = {27: "esc", 32: "space", 33: "pgup", 34: "pgdn", 35: "end", 36: "home", 37: "left",
              38: "up", 39: "right", 40: "down", 45: "ins", 46: "del", 106: "kp*", 107: "kp+",
              109: "kp-", 110: "kp.", 111: "kp/", 186: ";", 187: "=", 188: ",", 189: "-", 190: ".",
@@ -460,7 +425,6 @@ for _i in range(10):
 KEY_NAMES = set(_VK_NAMES.values())
 MODIFIERS = ("ctrl", "alt", "shift")
 
-# Cyrillic letters sit on the same physical keys as these Latin ones.
 _CYRILLIC = {
     "й": "q", "ц": "w", "у": "e", "к": "r", "е": "t", "н": "y", "г": "u", "ш": "i", "щ": "o", "з": "p",
     "х": "[", "ъ": "]", "ї": "]", "ф": "a", "ы": "s", "і": "s", "в": "d", "а": "f", "п": "g", "р": "h",
@@ -471,11 +435,6 @@ _ALIASES = {"pgdown": "pgdn", "escape": "esc", "insert": "ins", "delete": "del"}
 
 
 def key_name(vk, numpad=None, ctrl=False, alt=False, shift=False):
-    """Name of a key press from its Windows virtual key code.
-
-    numpad is the keypad name ("kp2") when the press came from the keypad,
-    whatever NumLock says; then that name wins over the arrow the VK reports.
-    """
     key = numpad or _VK_NAMES.get(vk)
     if not key:
         return None
@@ -484,7 +443,6 @@ def key_name(vk, numpad=None, ctrl=False, alt=False, shift=False):
 
 
 def canonical_key(raw):
-    """Any spelling of a combination ("Shift+Ctrl+я") as key_name would give it, or ""."""
     parts = re.sub(r"\s", "", str(raw).lower()).split("+")
     if len(parts) > 1 and parts[-1] == "" and parts[-2] == "kp":
         parts.pop()

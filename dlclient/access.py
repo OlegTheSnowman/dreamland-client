@@ -1,16 +1,7 @@
-"""Spoken names and descriptions for controls, without visible labels."""
-
 import wx
 
 
 class NamedAccessible(wx.Accessible):
-    """Answers a control's name and description for screen readers.
-
-    NVDA reads the name when the control gets focus, then the description
-    (with "Report object descriptions" on, which is its default). Role, value
-    and everything else still come from the native control.
-    """
-
     def __init__(self, ctrl, name, description=""):
         super().__init__(ctrl)
         self.name = name

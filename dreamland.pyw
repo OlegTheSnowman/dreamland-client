@@ -1,4 +1,3 @@
-"""Start the DreamLand desktop client."""
 import os
 import sys
 

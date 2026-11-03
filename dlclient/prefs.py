@@ -1,5 +1,3 @@
-"""Settings kept on this computer, in %APPDATA%\\DreamLandClient\\settings.json."""
-
 import json
 import os
 

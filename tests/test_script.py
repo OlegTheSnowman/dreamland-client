@@ -6,7 +6,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from dlclient.script import ScriptHost  # noqa: E402
+from dlclient.script import ScriptHost
 
 
 class ScriptTest(unittest.TestCase):
@@ -42,7 +42,7 @@ class ScriptTest(unittest.TestCase):
         self.assertFalse(h.load("while (true) {}", "account"))
         self.assertFalse(h.load("this is not javascript", "account"))
         self.assertTrue(h.load("keydown = function () { while (true) {} };", "account"))
-        self.assertFalse(h.on_key(1, "", False, False, False))   # stopped, not frozen
+        self.assertFalse(h.on_key(1, "", False, False, False))
 
 
 if __name__ == "__main__":

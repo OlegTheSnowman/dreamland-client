@@ -1,5 +1,3 @@
-"""Strings for triggers, macros, aliases, variables and game settings."""
-
 TOOLS = {
     "en": {
         "menu.tools": "&Tools",

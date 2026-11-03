@@ -1,5 +1,3 @@
-"""The main window: game output above, command field below."""
-
 import os
 import re
 import threading
@@ -42,7 +40,6 @@ class MainFrame(wx.Frame):
         self.app_dir = app_dir
         self.prefs = prefs_mod.load()
         if os.environ.get("DLCLIENT_QUIET"):
-            # Test launches: no sound, no speech, nothing saved.
             self.prefs["sound"]["mute"] = True
             self.prefs["speech"] = False
         self.tr = Tr(self.prefs.get("lang", "en"))
@@ -86,21 +83,21 @@ class MainFrame(wx.Frame):
         if not os.environ.get("DLCLIENT_QUIET"):
             threading.Thread(target=self._update_script, daemon=True).start()
 
-        self.lines = [["", []]]    # [text, links] per output line; last one is open
-        self.echo_lines = set()       # id() of lines holding a command the player sent
+        self.lines = [["", []]]
+        self.echo_lines = set()
         self.history = list(self.prefs.get("history", []))[-HISTORY_MAX:]
         self.hist_pos = None
         self.hints = []
-        self.hint_lines = {}          # offered command -> the output line it was in
-        self.hint_pos = None          # position while Down walks the offered commands
-        self.walk_until = 0           # after 'Walk there': run the route path answers with
-        self.completion = None        # Ctrl+Space state: what was typed and what matched
+        self.hint_lines = {}
+        self.hint_pos = None
+        self.walk_until = 0
+        self.completion = None
         self.prompt = {}
-        self.prompt_due = False       # a prompt frame came; its text line ends the next output
+        self.prompt_due = False
         self.lang_answered = False
         self.lang_menu_waiting = False
-        self.nanny_password = False   # the login is asking for a password
-        self.auto_sent = set()        # login steps answered for this connection
+        self.nanny_password = False
+        self.auto_sent = set()
 
         self._build()
         self._build_menu()
@@ -108,11 +105,7 @@ class MainFrame(wx.Frame):
         self.input.SetFocus()
         wx.CallAfter(self.connect)
 
-    # ------------------------------------------------------------------ layout
     def _build(self):
-        # Exactly two controls: the output and the command field. Tab and
-        # Shift+Tab move between them. Their names come through accessibility,
-        # not through visible labels, so nothing else is in the window.
         panel = wx.Panel(self)
         self.panel = panel
         self.output = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2 | wx.TE_NOHIDESEL)
@@ -132,13 +125,11 @@ class MainFrame(wx.Frame):
         self.output.Bind(wx.EVT_CHAR, self.on_output_char)
         self.output.Bind(wx.EVT_CONTEXT_MENU, lambda e: self.line_menu(always_menu=True))
 
-        # Ctrl+1 to Ctrl+9 read the 1st to 9th line from the end, Ctrl+0 the 10th.
         accel = []
         for n in range(1, 11):
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, n=n: self.read_recent(n), id=ident)
             accel.append((wx.ACCEL_CTRL, ord(str(n % 10)), ident))
-        # Chat buffers: Alt+Left and Alt+Right switch, Alt+Up and Alt+Down read.
         for key, fn in ((wx.WXK_LEFT, lambda: self.chat_switch(-1)), (wx.WXK_RIGHT, lambda: self.chat_switch(1)),
                         (wx.WXK_UP, lambda: self.chat_move(-1)), (wx.WXK_DOWN, lambda: self.chat_move(1)),
                         (wx.WXK_END, lambda: self.chat_newest())):
@@ -220,7 +211,7 @@ class MainFrame(wx.Frame):
         try:
             text = self.script.fetch_stock()
         except Exception:
-            return  # offline: the bundled copy runs
+            return
         wx.CallAfter(self._stock_arrived, text)
 
     def _stock_arrived(self, text):
@@ -228,11 +219,9 @@ class MainFrame(wx.Frame):
             self.script.load(text, "stock")
 
     def send_from_script(self, text):
-        # mudjs send() from a script: no echo, aliases expanded.
         self.conn.send_line(self.aliases.expand(text))
 
     def show_script_echo(self, text):
-        """Text a script echoes: shown and spoken like game output, triggers left out."""
         lines, complete, _ = self.parser.parse(text)
         if self.lines[-1][0]:
             self.append_lines([], True)
@@ -241,8 +230,6 @@ class MainFrame(wx.Frame):
             self.speech.say("\n".join(l.text for l in lines if l.text.strip()))
 
     def script_notify(self, text):
-        # The web client pops up a desktop notice; the line is already spoken
-        # here, so a sound and a taskbar flash say "look at this".
         self.sound.play("ui/notify", {"T": "ui"})
         if not self.IsActive():
             self.RequestUserAttention()
@@ -254,10 +241,9 @@ class MainFrame(wx.Frame):
                 if then:
                     wx.CallAfter(then)
         except Exception:
-            pass  # offline or the site changed: the bundled sounds still play
+            pass
 
     def _sound_missing(self, kind, name, opts):
-        """A sound the library does not have: fetch it, then play it if it arrives."""
         url = (opts or {}).get("U")
         if url:
             def get():
@@ -271,14 +257,12 @@ class MainFrame(wx.Frame):
                     wx.CallAfter(self.sound.handle, kind, got, {k: v for k, v in opts.items() if k != "U"})
             threading.Thread(target=get, daemon=True).start()
             return
-        # The web client may have gained the sound since we last looked.
         if time.time() - self.sound_refreshed < 300:
             return
         self.sound_refreshed = time.time()
         replay = lambda: self.sound.resolve(name) and self.sound.handle(kind, name, opts)
         threading.Thread(target=self._update_sounds, args=(self.sound_live, replay), daemon=True).start()
 
-    # ------------------------------------------------------------- connection
     def connect(self):
         if self.conn.is_open:
             return
@@ -308,7 +292,6 @@ class MainFrame(wx.Frame):
             self.nanny_password = step in ("password", "password_confirm")
             self.set_password_mode(self.nanny_password or self.telnet.echo_off)
         elif command == "version":
-            # Every new socket asks again for the chat lines (mudjs ChatPanel).
             self.conn.rpc("chat_subscribe", 1)
             self.auto_sent = set()
             self.nanny_password = False
@@ -380,8 +363,6 @@ class MainFrame(wx.Frame):
         text = self.telnet.process(raw)
         self.set_password_mode(self.telnet.echo_off or self.nanny_password)
         if self.telnet.echo_off:
-            # An existing character's password is asked for by turning echo
-            # off, with no nanny_step: that is the password question too.
             self.auto_login("password")
         if not text:
             return
@@ -394,9 +375,6 @@ class MainFrame(wx.Frame):
         for kind, name, opts in msp:
             self.sound.handle(kind, name, opts)
         if self.prompt_due and not complete and lines and self.prefs.get("hide_prompt", True):
-            # The server sends the prompt frame first, then the output with the
-            # text status line as its last, unfinished line. Ctrl+S reads the
-            # same numbers, so that line is left out of the output.
             lines[-1].text, lines[-1].links = "", []
         self.prompt_due = False
         starts = self.append_lines(lines, complete)
@@ -411,20 +389,15 @@ class MainFrame(wx.Frame):
             spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">")
             self.speech.say(spoken)
 
-    # ----------------------------------------------------------------- output
     def append_lines(self, lines, complete):
         if not lines and not complete:
             return []
         out = self.output
-        # While the player reads the output, the caret and selection stay
-        # exactly where they are; new text never drags them to the end.
         reading = wx.Window.FindFocus() is out
         sel = out.GetSelection()
         base = out.GetLastPosition()
         starts = []
         chunks = []
-        # Blank lines are left out: a line break is only made after a line
-        # that has something in it, and whitespace alone is never written.
         for i, line in enumerate(lines):
             if i > 0 and self.lines[-1][0]:
                 self.lines.append(["", []])
@@ -458,7 +431,6 @@ class MainFrame(wx.Frame):
         return starts
 
     def notice(self, text, speak=True):
-        """A line from the client itself, shown and spoken."""
         if self.lines[-1][0]:
             self.append_lines([], True)
         self.append_lines([Line(text, [])], True)
@@ -471,7 +443,6 @@ class MainFrame(wx.Frame):
         if self.lines[-1][0] and not self.lines[-1][0].endswith(" "):
             self.append_lines([Line(" ", [])], False)
         self.append_lines([Line(text, [])], True)
-        # Remember the line the command went on, so Ctrl+1 to Ctrl+0 skip it.
         if len(self.lines) > 1:
             self.echo_lines.add(id(self.lines[-2]))
 
@@ -482,20 +453,16 @@ class MainFrame(wx.Frame):
         col = pos - (before.rfind("\n") + 1)
         return min(row, len(self.lines) - 1), col
 
-    # ----------------------------------------------------------------- input
     def on_enter(self, event):
         text = self.input.GetValue()
         self.input.ChangeValue("")
         if self.password_mode:
-            # Never echoed, spoken, stored or replayed.
             self.conn.send_line(text)
             return
         if text.startswith("#"):
             self.echo(text)
             self.hash_command(text)
         else:
-            # Echo first, then let the script look at the line, as the web
-            # client does; a line the script takes (/victim) is not sent.
             self.echo(text)
             if not self.script.on_input(text):
                 self.send_command(text, expand=True, echo=False)
@@ -515,7 +482,6 @@ class MainFrame(wx.Frame):
 
     def on_input_key(self, event):
         if self.password_mode:
-            # No macros, history or drafts while a password is being typed.
             return event.Skip()
         if (event.GetKeyCode() == wx.WXK_SPACE and event.ControlDown()
                 and not event.AltDown() and not event.ShiftDown()):
@@ -548,11 +514,6 @@ class MainFrame(wx.Frame):
         event.Skip()
 
     def complete_word(self):
-        """Ctrl+Space: finish the word before the caret from words in the output.
-
-        Each press offers the next match, the most recently seen first; after
-        the last one the word goes back to what was typed.
-        """
         value = self.input.GetValue()
         pos = self.input.GetInsertionPoint()
         st = self.completion
@@ -588,7 +549,6 @@ class MainFrame(wx.Frame):
         self.say(word)
 
     def hint_commands(self):
-        """Commands offered in recent game text, newest first, each once."""
         out, seen = [], set()
         self.hint_lines = {}
         for text, links in reversed(self.lines[-LINK_LIST_LINES:]):
@@ -600,12 +560,6 @@ class MainFrame(wx.Frame):
         return out
 
     def browse_hints(self, key):
-        """Down in an empty field walks the commands the game offered.
-
-        Down starts at the newest and goes to older ones, Up comes back; Up
-        past the newest leaves an empty field. Returns False when the key is
-        not for hints, so the history gets it.
-        """
         at_history_end = self.hist_pos is None or self.hist_pos >= len(self.history)
         if self.hint_pos is None:
             if key != wx.WXK_DOWN or self.input.GetValue() or not at_history_end:
@@ -616,7 +570,6 @@ class MainFrame(wx.Frame):
                 return True
             self.hint_pos = 0
         elif self.input.GetValue() != self.hints[self.hint_pos]:
-            # The player edited the hint: it is a draft now, not a hint.
             self.hint_pos = None
             return False
         else:
@@ -630,13 +583,11 @@ class MainFrame(wx.Frame):
         value = self.hints[self.hint_pos]
         self.input.ChangeValue(value)
         self.input.SetInsertionPointEnd()
-        # The command, then the line it came from, so a hint keeps its context.
         line = self.hint_lines.get(value, "")
         self.say(value + ". " + line if line and line != value else value)
         return True
 
     def auto_login(self, step):
-        """Answer the name and password questions once per connection."""
         al = self.prefs.get("autologin") or {}
         name = (al.get("name") or "").strip()
         if not al.get("enabled") or not name or step in self.auto_sent:
@@ -672,7 +623,6 @@ class MainFrame(wx.Frame):
         self.input.SetFocus()
 
     def keep_draft(self):
-        """Put typed but unsent text into the history, so Up finds it again."""
         text = self.input.GetValue()
         if not text.strip():
             return
@@ -683,13 +633,11 @@ class MainFrame(wx.Frame):
         self.history.append(text)
         del self.history[:-HISTORY_MAX]
         if self.hist_pos is None:
-            # The draft is now the newest entry; Up goes on to the one before it.
             self.hist_pos = len(self.history) - 1
         else:
             self.hist_pos = min(self.hist_pos, len(self.history) - 1)
 
     def set_password_mode(self, on):
-        """Mask the command field itself, so the window keeps only two controls."""
         if on == self.password_mode:
             return
         self.password_mode = on
@@ -710,7 +658,6 @@ class MainFrame(wx.Frame):
         event.Skip()
 
     def on_output_char(self, event):
-        # Typing in the output goes to the command field.
         code = event.GetUnicodeKey()
         if code >= 32 and not event.ControlDown() and not event.AltDown():
             self.input.SetFocus()
@@ -718,9 +665,7 @@ class MainFrame(wx.Frame):
             return
         event.Skip()
 
-    # ------------------------------------------------- triggers, macros, hash
     def reset_lists(self):
-        # A new socket or a login change: the lists belong to the old character.
         self.script_asked = False
         self.triggers.reset()
         self.macros.reset()
@@ -775,11 +720,7 @@ class MainFrame(wx.Frame):
                 if fallback:
                     cmd = self.macros.command_for(fallback)
         if cmd is None and self.prefs.get("default_keys", True):
-            # Then the player script's keydown, as in the web client. Escape
-            # stays ours, so a cleared line still lands in the history.
             if self.script.ctx and event.GetKeyCode() != wx.WXK_ESCAPE:
-                # A keypad key is reported as itself whatever NumLock says, as
-                # the web client names keypad macros: keypad 8 is 104, not Up.
                 numpad = dialogs._numpad_table().get(event.GetKeyCode())
                 which, code = event.GetRawKeyCode(), ""
                 if numpad:
@@ -789,7 +730,7 @@ class MainFrame(wx.Frame):
                                       event.AltDown(), event.ShiftDown()):
                     return True
             elif not self.script.available:
-                cmd = DEFAULT_KEYS.get(name)   # no engine: the stock keypad at least
+                cmd = DEFAULT_KEYS.get(name)
         if cmd is None:
             return False
         line = expand_vars(cmd, self.vars)
@@ -894,7 +835,6 @@ class MainFrame(wx.Frame):
         dlg.Destroy()
         self.input.SetFocus()
 
-    # ----------------------------------------------------------------- links
     def line_menu(self, always_menu):
         row, col = self.current_line()
         links = self.lines[row][1]
@@ -976,9 +916,8 @@ class MainFrame(wx.Frame):
         else:
             dlg.Destroy()
 
-    # ----------------------------------------------------------------- status
     def update_status(self):
-        pass  # no status bar: Ctrl+S reads the status
+        pass
 
     def status_text(self):
         p = self.prompt
@@ -1046,15 +985,12 @@ class MainFrame(wx.Frame):
         dlg = dialogs.RoomsDialog(self, self.tr, rooms)
         if dlg.ShowModal() == wx.ID_OK and dlg.choice:
             vnum, how = dlg.choice
-            # The game answers 'path' with the route as a speedwalk; to walk,
-            # the next one that comes back is run.
             self.walk_until = time.time() + 5 if how == dlg.WALK else 0
             self.send_command("path %d" % vnum)
         dlg.Destroy()
         self.input.SetFocus()
 
     def read_recent(self, n):
-        """Speak the n-th line from the end, skipping blank lines and bare prompts."""
         seen = 0
         for line in reversed(self.lines):
             t = line[0].strip()
@@ -1068,10 +1004,7 @@ class MainFrame(wx.Frame):
     def read_status(self):
         self.say(self.status_text(), interrupt=True)
 
-    # ---------------------------------------------------------------- options
     def say(self, text, interrupt=True):
-        # Answers to the player's own keys are spoken even with speech of
-        # incoming text off: otherwise the key would seem to do nothing.
         self.speech.say(text, interrupt=interrupt)
 
     def toggle_speech(self):
@@ -1153,7 +1086,6 @@ EM_SETPASSWORDCHAR = 0xCC
 
 
 def set_password_char(ctrl, on):
-    """Mask or unmask a single-line text field in place (Windows edit control)."""
     try:
         import ctypes
         hwnd = ctrl.GetHandle()
