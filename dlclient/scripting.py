@@ -3,6 +3,8 @@ import json
 import re
 import time
 
+import regex
+
 SCOPES = ("char", "acct")
 SAVE_DELAY = 1.2
 RETRY_DELAY = 1.5
@@ -134,7 +136,7 @@ def compile_trigger(trig):
         return None
     try:
         if trig.get("regex"):
-            return re.compile(re.sub(r"\(\?<(?![=!])", "(?P<", pattern))
+            return regex.compile(pattern)
         parts = re.split(r"(%[1-9])", pattern)
         out = []
         for i, p in enumerate(parts):
@@ -143,8 +145,8 @@ def compile_trigger(trig):
                 out.append("(.+)" if at_end else "(.+?)")
             else:
                 out.append(re.escape(p))
-        return re.compile("".join(out), re.I)
-    except re.error:
+        return regex.compile("".join(out), regex.I)
+    except (re.error, regex.error):
         return None
 
 
@@ -204,10 +206,16 @@ class Triggers(SyncedLists):
         for t, r, order in self.compiled:
             hit = None
             started = time.perf_counter()
+            timed_out = False
             for i, line in enumerate(lines):
                 if not line:
                     continue
-                m = r.search(line)
+                left = SLOW_SECONDS - (time.perf_counter() - started)
+                try:
+                    m = r.search(line, timeout=max(left, 0.001))
+                except TimeoutError:
+                    timed_out = True
+                    break
                 if not m:
                     continue
                 hit = hit or m
@@ -217,7 +225,7 @@ class Triggers(SyncedLists):
                         highlights.append((i, 0, len(line), "line", hl["color"]))
                     elif m.end() > m.start():
                         highlights.append((i, m.start(), m.end(), "match", hl["color"]))
-            if time.perf_counter() - started > SLOW_SECONDS:
+            if timed_out or time.perf_counter() - started > SLOW_SECONDS:
                 self.slow.add(t.get("id"))
                 too_slow = True
                 notes.append(t.get("pattern", ""))
