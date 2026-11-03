@@ -23,6 +23,8 @@ class Connection:
         self.lock = threading.Lock()
         self._last_ping = 0
         self._retries = 0
+        self._resume_retries = 0
+        self._resume_delay = 0
 
     def connect(self):
         self.wanted = True
@@ -80,12 +82,15 @@ class Connection:
                 break
             if not self.resume_token:
                 break
-            self._retries += 1
-            if self._retries > 8:
-                self.resume_token = None
-                break
-            self.on_state("reconnecting", self._retries)
-            delay = min(delay * 2 if delay else 0.5, RECONNECT_MAX)
+            if self._resume_delay:
+                delay, self._resume_delay = self._resume_delay, 0
+            else:
+                self._retries += 1
+                if self._retries > 8:
+                    self.resume_token = None
+                    break
+                self.on_state("reconnecting", self._retries)
+                delay = min(delay * 2 if delay else 0.5, RECONNECT_MAX)
             time.sleep(delay)
         self.on_state("closed", None)
 
@@ -123,6 +128,7 @@ class Connection:
             if args and isinstance(args[0], dict) and args[0].get("resume"):
                 self.resume_token = args[0]["resume"]
         elif command == "resume_ok":
+            self._resume_retries = 0
             self.resume_pending = False
             self.in_world = True
             self._retries = 0
@@ -130,9 +136,9 @@ class Connection:
                 self.resume_token = args[0]
         elif command == "resume_failed":
             reason = args[0] if args else None
-            if reason != "final" and self._retries < 5:
-                self._retries += 1
-                time.sleep(min(0.8 * self._retries, 3))
+            if reason != "final" and self._resume_retries < 5:
+                self._resume_retries += 1
+                self._resume_delay = min(0.8 * self._resume_retries, 3)
                 try:
                     ws.close()
                 except Exception:
@@ -140,5 +146,6 @@ class Connection:
                 return
             self.resume_token = None
             self.resume_pending = False
+            self._resume_retries = 0
             self._answer_codepage()
         self.on_frame(command, args)
