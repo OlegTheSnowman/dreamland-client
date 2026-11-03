@@ -86,6 +86,7 @@ class MainFrame(wx.Frame):
             threading.Thread(target=self._update_script, daemon=True).start()
 
         self.lines = [["", []]]    # [text, links] per output line; last one is open
+        self.echo_lines = set()       # id() of lines holding a command the player sent
         self.history = list(self.prefs.get("history", []))[-HISTORY_MAX:]
         self.hist_pos = None
         self.hints = []
@@ -413,26 +414,33 @@ class MainFrame(wx.Frame):
         base = out.GetLastPosition()
         starts = []
         chunks = []
+        # Blank lines are left out: a line break is only made after a line
+        # that has something in it, and whitespace alone is never written.
         for i, line in enumerate(lines):
-            if i > 0:
+            if i > 0 and self.lines[-1][0]:
                 self.lines.append(["", []])
                 chunks.append("\n")
             cur = self.lines[-1]
             shift = len(cur[0])
             starts.append(base + sum(len(c) for c in chunks))
+            text = line.text
+            if not cur[0] and not text.strip():
+                text = ""
             for l in line.links:
                 l.start += shift
                 l.end += shift
-            cur[0] += line.text
+            cur[0] += text
             cur[1].extend(line.links)
-            chunks.append(line.text)
-        if complete:
+            chunks.append(text)
+        if complete and self.lines[-1][0]:
             self.lines.append(["", []])
             chunks.append("\n")
         out.AppendText("".join(chunks))
         if len(self.lines) > MAX_LINES:
             cut = sum(len(t) + 1 for t, _ in self.lines[:TRIM_LINES])
             del self.lines[:TRIM_LINES]
+            alive = {id(l) for l in self.lines}
+            self.echo_lines &= alive
             out.Remove(0, cut)
             sel = (max(0, sel[0] - cut), max(0, sel[1] - cut))
             starts = [max(0, x - cut) for x in starts]
@@ -454,6 +462,9 @@ class MainFrame(wx.Frame):
         if self.lines[-1][0] and not self.lines[-1][0].endswith(" "):
             self.append_lines([Line(" ", [])], False)
         self.append_lines([Line(text, [])], True)
+        # Remember the line the command went on, so Ctrl+1 to Ctrl+0 skip it.
+        if len(self.lines) > 1:
+            self.echo_lines.add(id(self.lines[-2]))
 
     def current_line(self):
         pos = self.output.GetInsertionPoint()
@@ -1004,9 +1015,9 @@ class MainFrame(wx.Frame):
     def read_recent(self, n):
         """Speak the n-th line from the end, skipping blank lines and bare prompts."""
         seen = 0
-        for text, _ in reversed(self.lines):
-            t = text.strip()
-            if not t or t == ">":
+        for line in reversed(self.lines):
+            t = line[0].strip()
+            if not t or t == ">" or id(line) in self.echo_lines:
                 continue
             seen += 1
             if seen == n:
