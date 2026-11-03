@@ -54,7 +54,7 @@ STRINGS = {
         "keys.title": "Keyboard shortcuts",
         "keys.text": (
             "Enter in the command field sends the command. Up and Down arrows go through earlier commands.\n"
-            "F6 moves between the command field and the game output.\n"
+            "Tab and Shift+Tab move between the game output and the command field. Alt opens the menus.\n"
             "In the game output, Enter on a line runs its command, or opens a menu when the line has several.\n"
             "The Applications key or Shift+F10 in the output always opens that menu.\n"
             "Ctrl+L lists the clickable commands from recent output.\n"
@@ -115,7 +115,7 @@ STRINGS = {
         "keys.title": "Клавіші",
         "keys.text": (
             "Enter у полі команди надсилає команду. Стрілки вгору і вниз гортають попередні команди.\n"
-            "F6 перемикає між полем команди і виводом гри.\n"
+            "Tab і Shift+Tab перемикають між виводом гри і полем команди. Alt відкриває меню.\n"
             "У виводі гри Enter на рядку виконує його команду або відкриває меню, якщо команд кілька.\n"
             "Клавіша контекстного меню або Shift+F10 у виводі завжди відкриває це меню.\n"
             "Ctrl+L показує команди з останнього виводу.\n"
@@ -176,7 +176,7 @@ STRINGS = {
         "keys.title": "Клавиши",
         "keys.text": (
             "Enter в поле команды отправляет команду. Стрелки вверх и вниз листают прежние команды.\n"
-            "F6 переключает между полем команды и выводом игры.\n"
+            "Tab и Shift+Tab переключают между выводом игры и полем команды. Alt открывает меню.\n"
             "В выводе игры Enter на строке выполняет ее команду или открывает меню, если команд несколько.\n"
             "Клавиша контекстного меню или Shift+F10 в выводе всегда открывает это меню.\n"
             "Ctrl+L показывает команды из последнего вывода.\n"

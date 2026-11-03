@@ -69,38 +69,27 @@ class MainFrame(wx.Frame):
 
     # ------------------------------------------------------------------ layout
     def _build(self):
+        # Exactly two controls: the output and the command field. Tab and
+        # Shift+Tab move between them. Their names come through accessibility,
+        # not through visible labels, so nothing else is in the window.
         panel = wx.Panel(self)
         self.panel = panel
-        self.output_label = wx.StaticText(panel, label=self.tr("output.name"))
         self.output = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2 | wx.TE_NOHIDESEL)
-        self.output.SetName(self.tr("output.name"))
-        self.input_label = wx.StaticText(panel, label=self.tr("input.name"))
         self.input = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.input.SetName(self.tr("input.name"))
-        self.password = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER | wx.TE_PASSWORD)
-        self.password.SetName(self.tr("password.name"))
-        self.password.Hide()
+        self.password_mode = False
+        self.output_acc = NamedAccessible(self.output, self.tr("output.name"))
+        self.input_acc = NamedAccessible(self.input, self.tr("input.name"))
 
         s = wx.BoxSizer(wx.VERTICAL)
-        s.Add(self.output_label, 0, wx.LEFT | wx.TOP, 4)
-        s.Add(self.output, 1, wx.EXPAND | wx.ALL, 4)
-        s.Add(self.input_label, 0, wx.LEFT, 4)
-        s.Add(self.input, 0, wx.EXPAND | wx.ALL, 4)
-        s.Add(self.password, 0, wx.EXPAND | wx.ALL, 4)
+        s.Add(self.output, 1, wx.EXPAND)
+        s.Add(self.input, 0, wx.EXPAND)
         panel.SetSizer(s)
 
-        self.CreateStatusBar()
-
         self.input.Bind(wx.EVT_TEXT_ENTER, self.on_enter)
-        self.password.Bind(wx.EVT_TEXT_ENTER, self.on_enter)
         self.input.Bind(wx.EVT_KEY_DOWN, self.on_input_key)
         self.output.Bind(wx.EVT_KEY_DOWN, self.on_output_key)
         self.output.Bind(wx.EVT_CHAR, self.on_output_char)
         self.output.Bind(wx.EVT_CONTEXT_MENU, lambda e: self.line_menu(always_menu=True))
-
-        self.id_f6 = wx.NewIdRef()
-        self.Bind(wx.EVT_MENU, self.on_f6, id=self.id_f6)
-        self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_F6, self.id_f6)]))
 
     def _build_menu(self):
         tr = self.tr
@@ -333,7 +322,6 @@ class MainFrame(wx.Frame):
         if self.lines[-1][0]:
             self.append_lines([], True)
         self.append_lines([Line(text, [])], True)
-        self.SetStatusText(text)
         if speak and self.prefs.get("speech"):
             self.speech.say(text)
 
@@ -351,10 +339,9 @@ class MainFrame(wx.Frame):
 
     # ----------------------------------------------------------------- input
     def on_enter(self, event):
-        ctrl = event.GetEventObject()
-        text = ctrl.GetValue()
-        ctrl.SetValue("")
-        if ctrl is self.password:
+        text = self.input.GetValue()
+        self.input.ChangeValue("")
+        if self.password_mode:
             # Never echoed, spoken, stored or replayed.
             self.conn.send_line(text)
             return
@@ -376,6 +363,9 @@ class MainFrame(wx.Frame):
             self.notice(self.tr("state.closed"))
 
     def on_input_key(self, event):
+        if self.password_mode:
+            # No macros, history or drafts while a password is being typed.
+            return event.Skip()
         if self.run_macro(event):
             return
         key = event.GetKeyCode()
@@ -416,24 +406,16 @@ class MainFrame(wx.Frame):
             self.hist_pos = min(self.hist_pos, len(self.history) - 1)
 
     def set_password_mode(self, on):
-        if on == self.password.IsShown():
+        """Mask the command field itself, so the window keeps only two controls."""
+        if on == self.password_mode:
             return
-        focus_was_input = wx.Window.FindFocus() in (self.input, self.password)
-        self.password.Show(on)
-        self.input.Show(not on)
-        self.input_label.SetLabel(self.tr("password.name") if on else self.tr("input.name"))
-        self.panel.Layout()
-        if focus_was_input:
-            (self.password if on else self.input).SetFocus()
+        self.password_mode = on
         if not on:
-            self.password.SetValue("")
-
-    def on_f6(self, event):
-        if wx.Window.FindFocus() is self.output:
-            (self.password if self.password.IsShown() else self.input).SetFocus()
-        else:
-            self.output.SetFocus()
-            self.output.SetInsertionPoint(self.output.GetLastPosition())
+            self.input.ChangeValue("")
+        set_password_char(self.input, on)
+        self.input_acc.name = self.tr("password.name" if on else "input.name")
+        if on:
+            self.input.ChangeValue("")
 
     def on_output_key(self, event):
         if self.run_macro(event):
@@ -448,9 +430,8 @@ class MainFrame(wx.Frame):
         # Typing in the output goes to the command field.
         code = event.GetUnicodeKey()
         if code >= 32 and not event.ControlDown() and not event.AltDown():
-            target = self.password if self.password.IsShown() else self.input
-            target.SetFocus()
-            target.WriteText(chr(code))
+            self.input.SetFocus()
+            self.input.WriteText(chr(code))
             return
         event.Skip()
 
@@ -694,9 +675,7 @@ class MainFrame(wx.Frame):
 
     # ----------------------------------------------------------------- status
     def update_status(self):
-        p = self.prompt
-        if "hit" in p:
-            self.SetStatusText(self.status_text())
+        pass  # no status bar: Ctrl+S reads the status
 
     def status_text(self):
         p = self.prompt
@@ -716,7 +695,6 @@ class MainFrame(wx.Frame):
         # Answers to the player's own keys are spoken even with speech of
         # incoming text off: otherwise the key would seem to do nothing.
         self.speech.say(text, interrupt=interrupt)
-        self.SetStatusText(text)
 
     def toggle_speech(self):
         self.prefs["speech"] = not self.prefs.get("speech")
@@ -743,11 +721,8 @@ class MainFrame(wx.Frame):
         self.prefs["lang"] = code
         self.tr = Tr(code)
         self._build_menu()
-        self.output_label.SetLabel(self.tr("output.name"))
-        self.output.SetName(self.tr("output.name"))
-        self.input.SetName(self.tr("input.name"))
-        self.password.SetName(self.tr("password.name"))
-        self.input_label.SetLabel(self.tr("password.name") if self.password.IsShown() else self.tr("input.name"))
+        self.output_acc.name = self.tr("output.name")
+        self.input_acc.name = self.tr("password.name" if self.password_mode else "input.name")
         self.say(self.tr("lang.later"))
 
     def show_text(self, title, text):
@@ -774,6 +749,38 @@ class MainFrame(wx.Frame):
         self.conn.disconnect()
         self.sound.stop_all()
         event.Skip()
+
+
+class NamedAccessible(wx.Accessible):
+    """Gives a control its spoken name without a visible label next to it.
+
+    Only the name is answered here; role, value and the rest still come from
+    the native control.
+    """
+
+    def __init__(self, ctrl, name):
+        super().__init__(ctrl)
+        self.name = name
+        ctrl.SetAccessible(self)
+
+    def GetName(self, childId):
+        if childId == 0:
+            return (wx.ACC_OK, self.name)
+        return (wx.ACC_NOT_IMPLEMENTED, "")
+
+
+EM_SETPASSWORDCHAR = 0xCC
+
+
+def set_password_char(ctrl, on):
+    """Mask or unmask a single-line text field in place (Windows edit control)."""
+    try:
+        import ctypes
+        hwnd = ctrl.GetHandle()
+        ctypes.windll.user32.SendMessageW(hwnd, EM_SETPASSWORDCHAR, 0x25CF if on else 0, 0)
+        ctrl.Refresh()
+    except Exception:
+        pass
 
 
 class LinksDialog(wx.Dialog):
