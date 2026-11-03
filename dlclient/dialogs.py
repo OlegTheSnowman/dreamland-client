@@ -903,3 +903,60 @@ class ChatDialog(wx.Dialog):
         if event.ControlDown() and event.GetKeyCode() == ord("C"):
             return self.copy()
         event.Skip()
+
+
+# --------------------------------------------------------- rooms of an area
+class RoomsDialog(wx.Dialog):
+    """Every room of the current area by name, from the web client's map.
+
+    Typing in the search field narrows the list. Walk there sends 'path' and
+    runs the route the game answers with; Show route only asks for it.
+    """
+
+    WALK, ROUTE = 101, 102
+
+    def __init__(self, parent, tr, rooms):
+        super().__init__(parent, title=tr("rooms.title"), size=wx.Size(620, 520),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.rooms, self.shown = tr, rooms, list(rooms)
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.search = labelled(self, s, tr("rooms.search"), wx.TextCtrl(self))
+        self.list = labelled(self, s, tr("rooms.list"), wx.ListBox(self), expand="grow")
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        walk = wx.Button(self, self.WALK, tr("rooms.walk"))
+        route = wx.Button(self, self.ROUTE, tr("rooms.route"))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        walk.SetDefault()
+        for b in (walk, route, close):
+            row.Add(b, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        self.SetSizer(s)
+        self.choice = None
+        self.search.Bind(wx.EVT_TEXT, lambda e: self.fill())
+        self.search.Bind(wx.EVT_KEY_DOWN, self.on_search_key)
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.done(self.WALK))
+        walk.Bind(wx.EVT_BUTTON, lambda e: self.done(self.WALK))
+        route.Bind(wx.EVT_BUTTON, lambda e: self.done(self.ROUTE))
+        self.fill()
+        self.search.SetFocus()
+
+    def fill(self):
+        q = self.search.GetValue().strip().lower()
+        self.shown = [r for r in self.rooms if q in r[1].lower()] if q else list(self.rooms)
+        self.list.Set([name for _, name in self.shown] or [self.tr("rooms.none")])
+        self.list.SetSelection(0)
+
+    def on_search_key(self, event):
+        # Down from the search field goes straight into the list.
+        if event.GetKeyCode() == wx.WXK_DOWN and self.shown:
+            self.list.SetFocus()
+            return
+        if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            return self.done(self.WALK)
+        event.Skip()
+
+    def done(self, how):
+        i = self.list.GetSelection()
+        if 0 <= i < len(self.shown):
+            self.choice = (self.shown[i][0], how)
+            self.EndModal(wx.ID_OK)

@@ -16,6 +16,7 @@ from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
 from . import creds
+from .areamap import NoMap, fetch_rooms
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -92,6 +93,7 @@ class MainFrame(wx.Frame):
         self.hints = []
         self.hint_lines = {}          # offered command -> the output line it was in
         self.hint_pos = None          # position while Down walks the offered commands
+        self.walk_until = 0           # after 'Walk there': run the route path answers with
         self.completion = None        # Ctrl+Space state: what was typed and what matched
         self.prompt = {}
         self.prompt_due = False       # a prompt frame came; its text line ends the next output
@@ -156,6 +158,7 @@ class MainFrame(wx.Frame):
         game.AppendSeparator()
         self._item(game, tr("menu.links"), lambda e: self.show_links())
         self._item(game, tr("menu.chat"), lambda e: self.open_chat())
+        self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
         game.AppendSeparator()
         self._item(game, tr("menu.exit"), lambda e: self.Close())
@@ -398,6 +401,12 @@ class MainFrame(wx.Frame):
         self.prompt_due = False
         starts = self.append_lines(lines, complete)
         self.run_triggers(lines, starts)
+        if self.walk_until and time.time() < self.walk_until:
+            route = next((l.command for line in lines for l in line.links
+                          if l.command.startswith("run ")), None)
+            if route:
+                self.walk_until = 0
+                self.send_command(route)
         if self.prefs.get("speech"):
             spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">")
             self.speech.say(spoken)
@@ -1009,6 +1018,38 @@ class MainFrame(wx.Frame):
     def open_chat(self):
         dlg = dialogs.ChatDialog(self, self.tr, self.chat, self.buffer_label)
         dlg.ShowModal()
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def open_rooms(self):
+        area = self.prompt.get("area")
+        if not area:
+            return self.say(self.tr("rooms.nowhere"))
+        self.say(self.tr("rooms.loading"))
+        lang = self.tr.lang
+
+        def load():
+            try:
+                rooms = fetch_rooms(area, lang)
+            except NoMap:
+                rooms = None
+            except Exception:
+                rooms = False
+            wx.CallAfter(self._rooms_loaded, rooms)
+        threading.Thread(target=load, daemon=True).start()
+
+    def _rooms_loaded(self, rooms):
+        if rooms is None:
+            return self.say(self.tr("rooms.nomap"))
+        if rooms is False:
+            return self.say(self.tr("rooms.offline"))
+        dlg = dialogs.RoomsDialog(self, self.tr, rooms)
+        if dlg.ShowModal() == wx.ID_OK and dlg.choice:
+            vnum, how = dlg.choice
+            # The game answers 'path' with the route as a speedwalk; to walk,
+            # the next one that comes back is run.
+            self.walk_until = time.time() + 5 if how == dlg.WALK else 0
+            self.send_command("path %d" % vnum)
         dlg.Destroy()
         self.input.SetFocus()
 
