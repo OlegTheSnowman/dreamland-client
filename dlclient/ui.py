@@ -16,6 +16,7 @@ from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
 from . import creds
+from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
 from .speech import Speech
@@ -64,6 +65,9 @@ class MainFrame(wx.Frame):
         self.aliases = Aliases(self.conn.rpc, self.conn.send_line, later)
         self.vars = self.prefs.setdefault("vars", {})
         self.settings_dlg = None
+        chat_parser = OutputParser()
+        self.chat = ChatStore(os.path.join(prefs_mod.folder(), "chat"),
+                              lambda t: " ".join(l.text.strip() for l in chat_parser.parse(t)[0] if l.text.strip()))
         self.script = ScriptHost(
             send=lambda s: self.send_from_script(s),
             echo=lambda s: self.show_script_echo(s),
@@ -129,6 +133,13 @@ class MainFrame(wx.Frame):
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, n=n: self.read_recent(n), id=ident)
             accel.append((wx.ACCEL_CTRL, ord(str(n % 10)), ident))
+        # Chat buffers: Alt+Left and Alt+Right switch, Alt+Up and Alt+Down read.
+        for key, fn in ((wx.WXK_LEFT, lambda: self.chat_switch(-1)), (wx.WXK_RIGHT, lambda: self.chat_switch(1)),
+                        (wx.WXK_UP, lambda: self.chat_move(-1)), (wx.WXK_DOWN, lambda: self.chat_move(1)),
+                        (wx.WXK_END, lambda: self.chat_newest())):
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, fn=fn: fn(), id=ident)
+            accel.append((wx.ACCEL_ALT, key, ident))
         self.SetAcceleratorTable(wx.AcceleratorTable(accel))
 
     def _build_menu(self):
@@ -141,6 +152,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
         game.AppendSeparator()
         self._item(game, tr("menu.links"), lambda e: self.show_links())
+        self._item(game, tr("menu.chat"), lambda e: self.open_chat())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
         game.AppendSeparator()
         self._item(game, tr("menu.exit"), lambda e: self.Close())
@@ -286,6 +298,8 @@ class MainFrame(wx.Frame):
             self.nanny_password = step in ("password", "password_confirm")
             self.set_password_mode(self.nanny_password or self.telnet.echo_off)
         elif command == "version":
+            # Every new socket asks again for the chat lines (mudjs ChatPanel).
+            self.conn.rpc("chat_subscribe", 1)
             self.auto_sent = set()
             self.nanny_password = False
             self.reset_lists()
@@ -315,6 +329,10 @@ class MainFrame(wx.Frame):
         elif command == "script_data" and args:
             if self.prefs.get("default_keys", True):
                 self.script.on_script_data(args[0])
+        elif command == "chat_state" and args and isinstance(args[0], dict):
+            self.chat.set_who(args[0].get("who") or None)
+        elif command == "chat" and args:
+            self.chat.add(args[0])
         elif command == "config_state":
             self.reset_lists()
         elif command == "triggers_data" and args:
@@ -934,6 +952,37 @@ class MainFrame(wx.Frame):
         if p.get("fight"):
             s += " " + self.tr("status.fighting")
         return s
+
+    def buffer_label(self, name):
+        key = "chat.buf." + name
+        label = self.tr(key)
+        return name if label == key else label
+
+    def chat_switch(self, step):
+        name = self.chat.switch(step)
+        n = len(self.chat.buffer_rows())
+        self.say(self.tr("chat.switched", self.buffer_label(name), n))
+
+    def chat_move(self, step):
+        row, edge = self.chat.move(step)
+        if edge == "empty":
+            return self.say(self.tr("chat.empty"))
+        text = row.get("text", "")
+        if edge == "top":
+            text = self.tr("chat.top") + " " + text
+        elif edge == "end":
+            text = self.tr("chat.end") + " " + text
+        self.say(text)
+
+    def chat_newest(self):
+        row = self.chat.newest()
+        self.say(row.get("text", "") if row else self.tr("chat.empty"))
+
+    def open_chat(self):
+        dlg = dialogs.ChatDialog(self, self.tr, self.chat, self.buffer_label)
+        dlg.ShowModal()
+        dlg.Destroy()
+        self.input.SetFocus()
 
     def read_recent(self, n):
         """Speak the n-th line from the end, skipping blank lines and bare prompts."""

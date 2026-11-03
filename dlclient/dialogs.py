@@ -6,6 +6,7 @@ so a screen reader names every field.
 
 import html
 import re
+import time
 
 import wx
 
@@ -851,3 +852,54 @@ class AutoLoginDialog(wx.Dialog):
             self.name.SetFocus()
             return
         self.EndModal(wx.ID_OK)
+
+
+# ------------------------------------------------------------ chat history
+class ChatDialog(wx.Dialog):
+    """One chat buffer as a list, to review and copy from."""
+
+    def __init__(self, parent, tr, store, buffer_label):
+        super().__init__(parent, title=tr("chat.title"), size=wx.Size(760, 520),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.store, self.buffer_label = tr, store, buffer_label
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.buffers = list(store.order)
+        self.choice = labelled(self, s, tr("chat.buffer"),
+                               wx.Choice(self, choices=[buffer_label(b) for b in self.buffers]))
+        self.choice.SetSelection(self.buffers.index(store.current) if store.current in self.buffers else 0)
+        self.list = labelled(self, s, tr("chat.messages"), wx.ListBox(self), expand="grow")
+        copy = wx.Button(self, label=tr("chat.copy"))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        row.Add(copy, 0, wx.ALL, 4)
+        row.Add(close, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        self.SetSizer(s)
+        self.choice.Bind(wx.EVT_CHOICE, lambda e: self.fill())
+        copy.Bind(wx.EVT_BUTTON, lambda e: self.copy())
+        self.list.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        self.fill()
+        self.list.SetFocus()
+
+    def fill(self):
+        name = self.buffers[self.choice.GetSelection()]
+        self.rows = self.store.buffer_rows(name)
+        items = [self.describe(r) for r in self.rows] or [self.tr("chat.empty")]
+        self.list.Set(items)
+        self.list.SetSelection(len(items) - 1)
+
+    def describe(self, r):
+        when = time.strftime("%H:%M", time.localtime(r.get("at") or 0))
+        return "%s, %s" % (r.get("text", ""), when)
+
+    def copy(self):
+        i = self.list.GetSelection()
+        if 0 <= i < len(self.rows) and wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(self.rows[i].get("text", "")))
+            wx.TheClipboard.Close()
+            wx.MessageBox(self.tr("chat.copied"), self.tr("chat.title"), wx.OK, self)
+
+    def on_key(self, event):
+        if event.ControlDown() and event.GetKeyCode() == ord("C"):
+            return self.copy()
+        event.Skip()
