@@ -92,6 +92,7 @@ class MainFrame(wx.Frame):
         self.hint_pos = None          # position while Down walks the offered commands
         self.completion = None        # Ctrl+Space state: what was typed and what matched
         self.prompt = {}
+        self.prompt_due = False       # a prompt frame came; its text line ends the next output
         self.lang_answered = False
         self.lang_menu_waiting = False
         self.nanny_password = False   # the login is asking for a password
@@ -181,6 +182,10 @@ class MainFrame(wx.Frame):
         it.Check(bool(self.prefs.get("default_keys", True)))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_default_keys(), it)
         self.defkeys_item = it
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.hideprompt"))
+        it.Check(bool(self.prefs.get("hide_prompt", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_hide_prompt(), it)
+        self.hideprompt_item = it
         self._item(opts, tr("menu.volume_up"), lambda e: self.change_volume(10))
         self._item(opts, tr("menu.volume_down"), lambda e: self.change_volume(-10))
         mb.Append(opts, tr("menu.options"))
@@ -316,6 +321,7 @@ class MainFrame(wx.Frame):
                 self.sound.stop_all()
         elif command == "prompt" and args and isinstance(args[0], dict):
             self.prompt.update(args[0])
+            self.prompt_due = True
             self.update_status()
             if self.nanny_password:
                 self.nanny_password = False
@@ -382,6 +388,12 @@ class MainFrame(wx.Frame):
         lines, complete, msp = self.parser.parse(text)
         for kind, name, opts in msp:
             self.sound.handle(kind, name, opts)
+        if self.prompt_due and not complete and lines and self.prefs.get("hide_prompt", True):
+            # The server sends the prompt frame first, then the output with the
+            # text status line as its last, unfinished line. Ctrl+S reads the
+            # same numbers, so that line is left out of the output.
+            lines[-1].text, lines[-1].links = "", []
+        self.prompt_due = False
         starts = self.append_lines(lines, complete)
         self.run_triggers(lines, starts)
         if self.prefs.get("speech"):
@@ -1014,6 +1026,11 @@ class MainFrame(wx.Frame):
         self.prefs["echo"] = not self.prefs.get("echo", True)
         self.echo_item.Check(self.prefs["echo"])
         self.say(self.tr("echo.on" if self.prefs["echo"] else "echo.off"))
+
+    def toggle_hide_prompt(self):
+        self.prefs["hide_prompt"] = not self.prefs.get("hide_prompt", True)
+        self.hideprompt_item.Check(self.prefs["hide_prompt"])
+        self.say(self.tr("hideprompt.on" if self.prefs["hide_prompt"] else "hideprompt.off"))
 
     def toggle_default_keys(self):
         self.prefs["default_keys"] = not self.prefs.get("default_keys", True)
