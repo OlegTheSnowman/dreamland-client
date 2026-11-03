@@ -44,6 +44,7 @@ STRINGS = {
         "confirm.title": "Confirm",
         "status.none": "No status yet.",
         "recent.none": "No line there yet.",
+        "complete.none": "Nothing to complete.",
         "status.line": "Health %s of %s, mana %s of %s, moves %s of %s.",
         "status.fighting": "Fighting.",
         "speech.on": "Speech on.",
@@ -66,6 +67,7 @@ STRINGS = {
             "The Applications key or Shift+F10 in the output always opens that menu.\n"
             "Ctrl+L lists the clickable commands from recent output.\n"
             "Ctrl+S reads health, mana and moves.\n"
+            "Ctrl+Space finishes the word you are typing from words in the output, newest first; press again for the next one, and after the last it goes back to what you typed.\n"
             "Down arrow in an empty command field fills in the newest command the game offered, such as a hint; more Down presses go to older ones, Up comes back.\n"
             "Keypad 8, 2, 4, 6, 9 and 1 walk north, south, west, east, up and down, 5 scans, Alt plus a direction scans that way. Ctrl+Shift+W turns this off.\n"
             "Ctrl+1 to Ctrl+9 read the 1st to 9th line from the end of the output, Ctrl+0 the 10th.\n"
@@ -115,6 +117,7 @@ STRINGS = {
         "confirm.title": "Підтвердження",
         "status.none": "Стану ще немає.",
         "recent.none": "Такого рядка ще немає.",
+        "complete.none": "Нічого доповнити.",
         "status.line": "Здоровʼя %s з %s, мана %s з %s, рухи %s з %s.",
         "status.fighting": "У бою.",
         "speech.on": "Озвучення увімкнено.",
@@ -137,6 +140,7 @@ STRINGS = {
             "Клавіша контекстного меню або Shift+F10 у виводі завжди відкриває це меню.\n"
             "Ctrl+L показує команди з останнього виводу.\n"
             "Ctrl+S читає здоровʼя, ману і рухи.\n"
+            "Ctrl+пробіл доповнює слово, яке ти набираєш, словами з виводу, найновіші першими; ще раз - наступне, після останнього повертається набране.\n"
             "Стрілка вниз у порожньому полі команди підставляє найновішу команду, яку запропонувала гра, наприклад підказку; ще раз вниз - старіші, вгору - назад.\n"
             "Цифрова клавіатура 8, 2, 4, 6, 9 і 1 веде на північ, південь, захід, схід, вгору і вниз, 5 оглядає, Alt з напрямком оглядає в той бік. Ctrl+Shift+W вимикає це.\n"
             "Ctrl+1..Ctrl+9 читають 1-й..9-й рядок з кінця виводу, Ctrl+0 10-й.\n"
@@ -186,6 +190,7 @@ STRINGS = {
         "confirm.title": "Подтверждение",
         "status.none": "Состояния еще нет.",
         "recent.none": "Такой строки еще нет.",
+        "complete.none": "Нечего дополнить.",
         "status.line": "Здоровье %s из %s, мана %s из %s, движение %s из %s.",
         "status.fighting": "В бою.",
         "speech.on": "Озвучка включена.",
@@ -208,6 +213,7 @@ STRINGS = {
             "Клавиша контекстного меню или Shift+F10 в выводе всегда открывает это меню.\n"
             "Ctrl+L показывает команды из последнего вывода.\n"
             "Ctrl+S читает здоровье, ману и движение.\n"
+            "Ctrl+пробел дополняет набираемое слово словами из вывода, самые новые первыми; еще раз - следующее, после последнего возвращается набранное.\n"
             "Стрелка вниз в пустом поле команды подставляет самую новую команду, которую предложила игра, например подсказку; еще раз вниз - более старые, вверх - назад.\n"
             "Цифровая клавиатура 8, 2, 4, 6, 9 и 1 ведет на север, юг, запад, восток, вверх и вниз, 5 осматривает, Alt с направлением осматривает в ту сторону. Ctrl+Shift+W выключает это.\n"
             "Ctrl+1..Ctrl+9 читают 1-ю..9-ю строку с конца вывода, Ctrl+0 10-ю.\n"

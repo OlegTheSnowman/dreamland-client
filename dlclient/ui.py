@@ -1,6 +1,7 @@
 """The main window: game output above, command field below."""
 
 import os
+import re
 import threading
 import time
 import webbrowser
@@ -64,6 +65,7 @@ class MainFrame(wx.Frame):
         self.hist_pos = None
         self.hints = []
         self.hint_pos = None          # position while Down walks the offered commands
+        self.completion = None        # Ctrl+Space state: what was typed and what matched
         self.prompt = {}
         self.lang_answered = False
         self.lang_menu_waiting = False
@@ -393,6 +395,10 @@ class MainFrame(wx.Frame):
         if self.password_mode:
             # No macros, history or drafts while a password is being typed.
             return event.Skip()
+        if (event.GetKeyCode() == wx.WXK_SPACE and event.ControlDown()
+                and not event.AltDown() and not event.ShiftDown()):
+            self.complete_word()
+            return
         if self.run_macro(event):
             return
         key = event.GetKeyCode()
@@ -418,6 +424,46 @@ class MainFrame(wx.Frame):
             self.hist_pos = None
             return
         event.Skip()
+
+    def complete_word(self):
+        """Ctrl+Space: finish the word before the caret from words in the output.
+
+        Each press offers the next match, the most recently seen first; after
+        the last one the word goes back to what was typed.
+        """
+        value = self.input.GetValue()
+        pos = self.input.GetInsertionPoint()
+        st = self.completion
+        if not (st and st["value"] == value and st["pos"] == pos):
+            m = re.search(r"[\w'-]+$", value[:pos])
+            if not m:
+                self.say(self.tr("complete.none"))
+                return
+            prefix = m.group(0)
+            low = prefix.lower()
+            found, seen = [], {low}
+            for text, _ in reversed(self.lines):
+                for word in reversed(re.findall(r"\w[\w'-]*", text)):
+                    w = word.lower()
+                    if w.startswith(low) and w not in seen:
+                        seen.add(w)
+                        found.append(word)
+            if not found:
+                self.say(self.tr("complete.none"))
+                return
+            st = self.completion = {"start": m.start(), "prefix": prefix, "found": found, "i": -1}
+        st["i"] += 1
+        if st["i"] >= len(st["found"]):
+            st["i"] = -1
+            word = st["prefix"]
+        else:
+            word = st["found"][st["i"]]
+        start, end = st["start"], pos
+        new = value[:start] + word + value[end:]
+        self.input.ChangeValue(new)
+        self.input.SetInsertionPoint(start + len(word))
+        st["value"], st["pos"] = new, start + len(word)
+        self.say(word)
 
     def hint_commands(self):
         """Commands offered in recent game text, newest first, each once."""
