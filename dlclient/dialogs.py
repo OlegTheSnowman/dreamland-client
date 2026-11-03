@@ -4,10 +4,12 @@ Every window is plain wx controls with a visible label in front of each one,
 so a screen reader names every field.
 """
 
+import html
 import re
 
 import wx
 
+from .access import NamedAccessible
 from .scripting import SCOPES, VAR_NAME, Aliases, compile_trigger, key_name
 
 COLOURS = [
@@ -27,6 +29,7 @@ def labelled(parent, sizer, label, ctrl, expand=True):
     sizer.Add(t, 0, wx.LEFT | wx.RIGHT | wx.TOP, 6)
     sizer.Add(ctrl, 1 if expand == "grow" else 0, wx.EXPAND | wx.ALL, 6)
     ctrl.SetName(label.replace("&", ""))
+    ctrl._acc = NamedAccessible(ctrl, label.replace("&", ""))
     return ctrl
 
 
@@ -620,72 +623,179 @@ class SettingsDialog(wx.Dialog):
         self.panel.Layout()
 
     def _add_option(self, s, opt):
+        """One setting, drawn like a row of the web client's settings window.
+
+        Every control is named with the setting and what it is now, the same
+        sentence the web client shows beside it, and describes itself with the
+        hint, the longer help and the examples. A visible line under it shows
+        the status for sighted players.
+        """
         key, kind = opt.get("key"), opt.get("type")
-        if not key:
+        if not key or kind not in ("bool", "enum", "int", "string", "account"):
             return
-        label = opt.get("label") or key
-        hint = opt.get("hint") or ""
-        value = self.values.get(key)
         p = self.panel
+        label = opt.get("label") or key
+        value = self.values.get(key)
+        row = {"opt": opt, "ctrls": [], "label": label}
+
+        title = wx.StaticText(p, label=label)
+        title.SetFont(title.GetFont().Bold())
+        s.Add(title, 0, wx.LEFT | wx.RIGHT | wx.TOP, 6)
+
         if kind == "bool":
             c = wx.CheckBox(p, label=label)
-            c.SetValue(bool(value) and value not in ("0", "off", "false"))
             c.Bind(wx.EVT_CHECKBOX, lambda e, k=key, c=c: self.send(k, "on" if c.GetValue() else "off"))
             s.Add(c, 0, wx.ALL, 6)
+            row["main"] = c
         elif kind == "enum":
             vals = opt.get("values") or []
-            names = ["%s (%s)" % (v.get("label", v.get("value")), v.get("desc")) if v.get("desc")
+            names = [("%s: %s" % (v.get("label", v.get("value")), v.get("desc"))) if v.get("desc")
                      else str(v.get("label", v.get("value"))) for v in vals]
-            c = labelled(p, s, label, wx.Choice(p, choices=names))
+            c = wx.Choice(p, choices=names)
             keys = [str(v.get("value")) for v in vals]
-            if str(value) in keys:
-                c.SetSelection(keys.index(str(value)))
             c.Bind(wx.EVT_CHOICE, lambda e, k=key, c=c, keys=keys: self.send(k, keys[c.GetSelection()]))
+            s.Add(c, 0, wx.EXPAND | wx.ALL, 6)
+            row["main"], row["keys"] = c, keys
         elif kind == "int":
-            lo, hi = int(opt.get("min", 0)), int(opt.get("max", 1000))
+            lo, hi = int(opt.get("min", 0)), int(opt.get("max", 100))
             off = opt.get("offValue")
-            if off is not None:
-                lo = min(lo, int(off))
-            c = labelled(p, s, label, wx.SpinCtrl(p, min=lo, max=hi, initial=int(value or 0)
-                                                  if str(value or "0").lstrip("-").isdigit() else lo))
-            apply = wx.Button(p, label=self.tr("cfg.apply") + ": " + label)
-            apply.Bind(wx.EVT_BUTTON, lambda e, k=key, c=c: self.send(k, str(c.GetValue())))
-            s.Add(apply, 0, wx.LEFT | wx.BOTTOM, 6)
-        elif kind == "string":
-            c = labelled(p, s, label, wx.TextCtrl(p, value=str(value or ""), style=wx.TE_PROCESS_ENTER))
-            apply = wx.Button(p, label=self.tr("cfg.apply") + ": " + label)
-            go = (lambda e, k=key, c=c: self.send(k, c.GetValue()))
-            apply.Bind(wx.EVT_BUTTON, go)
+            c = wx.TextCtrl(p, style=wx.TE_PROCESS_ENTER)
+            go = (lambda e, k=key, c=c: self.send_int(k, c))
             c.Bind(wx.EVT_TEXT_ENTER, go)
-            s.Add(apply, 0, wx.LEFT | wx.BOTTOM, 6)
-        else:
-            return
-        if hint:
-            c.SetHelpText(hint)
-            c.SetToolTip(hint)
-            h = wx.StaticText(p, label=hint)
-            s.Add(h, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
-        self.controls[key] = (c, opt)
+            line = wx.BoxSizer(wx.HORIZONTAL)
+            line.Add(c, 1, wx.RIGHT, 6)
+            apply = wx.Button(p, label=self.tr("cfg.apply"))
+            apply.Bind(wx.EVT_BUTTON, go)
+            line.Add(apply, 0, wx.RIGHT, 6)
+            row["ctrls"].append((apply, self.tr("cfg.apply") + ": " + label))
+            if off is not None:
+                b = wx.Button(p, label=self.tr("cfg.turnoff"))
+                b.Bind(wx.EVT_BUTTON, lambda e, k=key, off=off: self.send(k, str(off)))
+                line.Add(b, 0)
+                row["ctrls"].append((b, self.tr("cfg.turnoff") + ": " + label))
+            s.Add(line, 0, wx.EXPAND | wx.ALL, 6)
+            row["main"] = c
+            row["range"] = self.tr("cfg.range", lo, hi)
+        elif kind == "string":
+            c = wx.TextCtrl(p, style=wx.TE_PROCESS_ENTER)
+            if opt.get("placeholder"):
+                c.SetHint(opt["placeholder"])
+            go = (lambda e, k=key, c=c: self.send(k, c.GetValue().strip()))
+            c.Bind(wx.EVT_TEXT_ENTER, go)
+            line = wx.BoxSizer(wx.HORIZONTAL)
+            line.Add(c, 1, wx.RIGHT, 6)
+            apply = wx.Button(p, label=self.tr("cfg.apply"))
+            apply.Bind(wx.EVT_BUTTON, go)
+            line.Add(apply, 0, wx.RIGHT, 6)
+            clear = wx.Button(p, label=self.tr("cfg.clear"))
+            clear.Bind(wx.EVT_BUTTON, lambda e, k=key: self.send(k, ""))
+            line.Add(clear, 0)
+            s.Add(line, 0, wx.EXPAND | wx.ALL, 6)
+            row["ctrls"] += [(apply, self.tr("cfg.apply") + ": " + label),
+                             (clear, self.tr("cfg.clear") + ": " + label)]
+            row["main"] = c
+            if opt.get("placeholder"):
+                row["range"] = self.tr("cfg.example", opt["placeholder"])
+        else:  # account: a linked service, changed through an action button
+            # The secret word shows up here once asked for, ready to copy.
+            c = wx.TextCtrl(p, style=wx.TE_READONLY)
+            s.Add(c, 0, wx.EXPAND | wx.ALL, 6)
+            row["main"] = c
+            line = wx.BoxSizer(wx.HORIZONTAL)
+            for action in opt.get("actions") or []:
+                alabel = action.get("label") or str(action.get("value"))
+                if isinstance(alabel, dict):
+                    alabel = alabel.get(self.tr.lang) or alabel.get("en") or ""
+                b = wx.Button(p, label=alabel)
+                b.Bind(wx.EVT_BUTTON, lambda e, k=key, v=action.get("value", ""): self.send(k, str(v)))
+                line.Add(b, 0, wx.RIGHT, 6)
+                row["ctrls"].append((b, alabel + ": " + label))
+            s.Add(line, 0, wx.ALL, 6)
+
+        row["status"] = wx.StaticText(p, label="")
+        s.Add(row["status"], 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        row["acc"] = NamedAccessible(row["main"], label, self.long_help(opt))
+        for ctrl, name in row["ctrls"]:
+            ctrl._acc = NamedAccessible(ctrl, name, self.long_help(opt))
+        self.controls[key] = row
+        self._show_value(key, value)
+
+    def long_help(self, opt):
+        """Hint, help and examples as plain text, for the description NVDA reads."""
+        parts = [opt.get("hint") or "", opt.get("help") or ""]
+        for ex in opt.get("examples") or []:
+            text = re.sub(r"<[^>]+>", "", str(ex.get("text") or ""))
+            parts.append("%s: %s" % (ex.get("label") or self.tr("cfg.example", ""), html.unescape(text)))
+        return "\n".join(x for x in parts if x)
+
+    def describe(self, opt, value):
+        """What the game says the setting is now (mudjs OptionRow describe)."""
+        kind = opt.get("type")
+        hint = opt.get("hint") or ""
+        if kind == "bool":
+            return (opt.get("on") if self._on(value) else opt.get("off")) or hint
+        if kind == "enum":
+            for v in opt.get("values") or []:
+                if str(v.get("value")) == str(value):
+                    return v.get("desc") or v.get("label") or hint
+            return hint
+        if kind == "int":
+            off = opt.get("offValue", 0)
+            try:
+                n = int(value)
+            except (TypeError, ValueError):
+                return opt.get("descEmpty") or hint
+            if n == off:
+                return opt.get("descEmpty") or hint
+            return (opt.get("desc") or hint).replace("%d", str(n))
+        held = (value or {}).get("username") if kind == "account" and isinstance(value, dict) else value
+        if not held:
+            return opt.get("descEmpty") or hint
+        return (opt.get("desc") or hint).replace("%s", str(held))
+
+    @staticmethod
+    def _on(value):
+        return bool(value) and str(value).lower() not in ("0", "off", "false")
 
     def send(self, key, value):
         self.rpc("config_set", key, value)
 
+    def send_int(self, key, ctrl):
+        text = ctrl.GetValue().strip()
+        if not text.lstrip("-").isdigit():
+            self.say(self.tr("cfg.notnumber"))
+            return
+        self.send(key, text)
+
     def _show_value(self, key, value):
         self.values[key] = value
-        if key not in self.controls:
+        row = self.controls.get(key)
+        if not row:
             return
-        c, opt = self.controls[key]
+        opt, c = row["opt"], row["main"]
         kind = opt.get("type")
         if kind == "bool":
-            c.SetValue(bool(value) and value not in ("0", "off", "false"))
+            c.SetValue(self._on(value))
         elif kind == "enum":
-            keys = [str(v.get("value")) for v in opt.get("values") or []]
-            if str(value) in keys:
-                c.SetSelection(keys.index(str(value)))
-        elif kind == "int" and str(value).lstrip("-").isdigit():
-            c.SetValue(int(value))
-        elif kind == "string":
-            c.ChangeValue(str(value))
+            if str(value) in row["keys"]:
+                c.SetSelection(row["keys"].index(str(value)))
+        elif kind in ("int", "string"):
+            c.ChangeValue("" if value is None else str(value))
+        elif kind == "account":
+            token = value.get("token") if isinstance(value, dict) else None
+            c.ChangeValue(("/link " + token) if token else "")
+        status = self.describe(opt, value)
+        row["status"].SetLabel(status)
+        # The name carries the current state, so Tab onto it says everything.
+        name = row["label"]
+        if row.get("range"):
+            name += ", " + row["range"]
+        if status:
+            name += ": " + status
+        if kind == "account" and c.GetValue():
+            name += ". " + self.tr("cfg.secret")
+        row["acc"].name = name
+        self.panel.Layout()
 
     def on_result(self, body):
         if not isinstance(body, dict) or not body.get("key"):
