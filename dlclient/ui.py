@@ -15,6 +15,7 @@ from . import dialogs
 from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
+from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
 from .speech import Speech
 from .telnet import Telnet
@@ -23,6 +24,9 @@ _DIRS = {"kp8": "north", "kp2": "south", "kp4": "west", "kp6": "east", "kp9": "u
 DEFAULT_KEYS = dict(_DIRS)
 DEFAULT_KEYS.update({"alt+" + k: "scan " + d for k, d in _DIRS.items()})
 DEFAULT_KEYS["kp5"] = "scan"
+
+KEYPAD_CODES = {"kp%d" % i: 96 + i for i in range(10)}
+KEYPAD_CODES.update({"kp*": 106, "kp+": 107, "kp-": 109, "kp.": 110, "kp/": 111})
 
 MAX_LINES = 20000
 TRIM_LINES = 4000
@@ -59,6 +63,22 @@ class MainFrame(wx.Frame):
         self.aliases = Aliases(self.conn.rpc, self.conn.send_line, later)
         self.vars = self.prefs.setdefault("vars", {})
         self.settings_dlg = None
+        self.script = ScriptHost(
+            send=lambda s: self.send_from_script(s),
+            echo=lambda s: self.show_script_echo(s),
+            notify=lambda s: self.script_notify(s),
+            autobuff=lambda: self.conn.rpc("autobuff"),
+            get_input=lambda: self.input.GetValue(),
+            set_input=lambda s: self.input.ChangeValue(s),
+            error=lambda s: self.notice(self.tr("script.error", s)),
+            cache_dir=prefs_mod.folder(),
+            bundled=os.path.join(app_dir, "dlclient", "defaults.js"),
+        )
+        self.script_asked = False
+        if self.prefs.get("default_keys", True):
+            self.script.load(self.script.stock_text(), "stock")
+        if not os.environ.get("DLCLIENT_QUIET"):
+            threading.Thread(target=self._update_script, daemon=True).start()
 
         self.lines = [["", []]]    # [text, links] per output line; last one is open
         self.history = list(self.prefs.get("history", []))[-HISTORY_MAX:]
@@ -171,6 +191,37 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, handler, it)
         return it
 
+    def _update_script(self):
+        try:
+            text = self.script.fetch_stock()
+        except Exception:
+            return  # offline: the bundled copy runs
+        wx.CallAfter(self._stock_arrived, text)
+
+    def _stock_arrived(self, text):
+        if self.prefs.get("default_keys", True) and self.script.source == "stock" and text != self.script.text:
+            self.script.load(text, "stock")
+
+    def send_from_script(self, text):
+        # mudjs send() from a script: no echo, aliases expanded.
+        self.conn.send_line(self.aliases.expand(text))
+
+    def show_script_echo(self, text):
+        """Text a script echoes: shown and spoken like game output, triggers left out."""
+        lines, complete, _ = self.parser.parse(text)
+        if self.lines[-1][0]:
+            self.append_lines([], True)
+        self.append_lines(lines, complete)
+        if self.prefs.get("speech"):
+            self.speech.say("\n".join(l.text for l in lines if l.text.strip()))
+
+    def script_notify(self, text):
+        # The web client pops up a desktop notice; the line is already spoken
+        # here, so a sound and a taskbar flash say "look at this".
+        self.sound.play("ui/notify", {"T": "ui"})
+        if not self.IsActive():
+            self.RequestUserAttention()
+
     def _update_sounds(self, live, then=None):
         try:
             if fetch_live_library(live, os.path.join(self.app_dir, "sounds")):
@@ -253,6 +304,12 @@ class MainFrame(wx.Frame):
             self.triggers.ask()
             self.macros.ask()
             self.aliases.ask()
+            self.script.on_prompt(args[0])
+            if not self.script_asked and self.conn.rpc("script_get"):
+                self.script_asked = True
+        elif command == "script_data" and args:
+            if self.prefs.get("default_keys", True):
+                self.script.on_script_data(args[0])
         elif command == "config_state":
             self.reset_lists()
         elif command == "triggers_data" and args:
@@ -377,15 +434,20 @@ class MainFrame(wx.Frame):
             self.echo(text)
             self.hash_command(text)
         else:
-            self.send_command(text, expand=True)
+            # Echo first, then let the script look at the line, as the web
+            # client does; a line the script takes (/victim) is not sent.
+            self.echo(text)
+            if not self.script.on_input(text):
+                self.send_command(text, expand=True, echo=False)
         if text.strip() and (not self.history or self.history[-1] != text):
             self.history.append(text)
             del self.history[:-HISTORY_MAX]
         self.hist_pos = None
         self.hint_pos = None
 
-    def send_command(self, text, echo_text=None, expand=False):
-        self.echo(echo_text if echo_text is not None else text)
+    def send_command(self, text, echo_text=None, expand=False, echo=True):
+        if echo:
+            self.echo(echo_text if echo_text is not None else text)
         if expand:
             text = self.aliases.expand(text)
         if not self.conn.send_line(text):
@@ -559,12 +621,16 @@ class MainFrame(wx.Frame):
     # ------------------------------------------------- triggers, macros, hash
     def reset_lists(self):
         # A new socket or a login change: the lists belong to the old character.
+        self.script_asked = False
         self.triggers.reset()
         self.macros.reset()
         self.aliases.reset()
 
     def run_triggers(self, lines, starts):
         texts = [l.text for l in lines]
+        for t in texts:
+            if t.strip():
+                self.script.on_text(t)
         fired, highlights, notes = self.triggers.run(texts)
         for i, a, b, mode, colour in highlights:
             if i < len(starts):
@@ -609,9 +675,21 @@ class MainFrame(wx.Frame):
                 if fallback:
                     cmd = self.macros.command_for(fallback)
         if cmd is None and self.prefs.get("default_keys", True):
-            # The web client's default script: the keypad walks, 5 scans,
-            # Alt plus a direction scans that way. Player macros come first.
-            cmd = DEFAULT_KEYS.get(name)
+            # Then the player script's keydown, as in the web client. Escape
+            # stays ours, so a cleared line still lands in the history.
+            if self.script.ctx and event.GetKeyCode() != wx.WXK_ESCAPE:
+                # A keypad key is reported as itself whatever NumLock says, as
+                # the web client names keypad macros: keypad 8 is 104, not Up.
+                numpad = dialogs._numpad_table().get(event.GetKeyCode())
+                which, code = event.GetRawKeyCode(), ""
+                if numpad:
+                    which = KEYPAD_CODES.get(numpad, which)
+                    code = "Numpad" + numpad[2:] if numpad[2:].isdigit() else ""
+                if self.script.on_key(which, code, event.ControlDown(),
+                                      event.AltDown(), event.ShiftDown()):
+                    return True
+            elif not self.script.available:
+                cmd = DEFAULT_KEYS.get(name)   # no engine: the stock keypad at least
         if cmd is None:
             return False
         line = expand_vars(cmd, self.vars)
@@ -846,6 +924,11 @@ class MainFrame(wx.Frame):
     def toggle_default_keys(self):
         self.prefs["default_keys"] = not self.prefs.get("default_keys", True)
         self.defkeys_item.Check(self.prefs["default_keys"])
+        if self.prefs["default_keys"]:
+            self.script.load(self.script.stock_text(), "stock")
+            self.script_asked = False
+        else:
+            self.script.ctx = None
         self.say(self.tr("defkeys.on" if self.prefs["default_keys"] else "defkeys.off"))
 
     def toggle_mute(self):

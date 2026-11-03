@@ -52,9 +52,10 @@ STRINGS = {
         "menu.echo": "Show sent &commands in the output	Ctrl+Shift+E",
         "echo.on": "Sent commands are shown in the output.",
         "echo.off": "Sent commands are hidden from the output.",
-        "menu.defkeys": "&Keypad walks and scans\tCtrl+Shift+W",
-        "defkeys.on": "Keypad movement on.",
-        "defkeys.off": "Keypad movement off.",
+        "menu.defkeys": "Run the web client's player &script (keypad, script commands and triggers)\tCtrl+Shift+W",
+        "script.error": "The player script did not load: %s",
+        "defkeys.on": "Player script on.",
+        "defkeys.off": "Player script off.",
         "sound.muted": "Sounds muted.",
         "sound.unmuted": "Sounds on.",
         "sound.volume": "Volume %d percent.",
@@ -69,7 +70,7 @@ STRINGS = {
             "Ctrl+S reads health, mana and moves.\n"
             "Ctrl+Space finishes the word you are typing from words in the output, newest first; press again for the next one, and after the last it goes back to what you typed.\n"
             "Down arrow in an empty command field fills in the newest command the game offered, such as a hint; more Down presses go to older ones, Up comes back.\n"
-            "Keypad 8, 2, 4, 6, 9 and 1 walk north, south, west, east, up and down, 5 scans, Alt plus a direction scans that way. Ctrl+Shift+W turns this off.\n"
+            "The web client's player script runs here too: by default keypad 8, 2, 4, 6, 9 and 1 walk north, south, west, east, up and down, 5 scans, Alt plus a direction scans that way, and the tilde key starts autobuff. Your own script, if you edited it in the web client, comes from the game server. Ctrl+Shift+W turns the script off.\n"
             "Ctrl+1 to Ctrl+9 read the 1st to 9th line from the end of the output, Ctrl+0 the 10th.\n"
             "Ctrl+Shift+S turns speech of incoming text on and off.\n"
             "Ctrl+Shift+M mutes sounds. Ctrl+Shift+Up and Down change the volume.\n"
@@ -125,9 +126,10 @@ STRINGS = {
         "menu.echo": "Показувати надіслані &команди у виводі	Ctrl+Shift+E",
         "echo.on": "Надіслані команди показуються у виводі.",
         "echo.off": "Надіслані команди приховано з виводу.",
-        "menu.defkeys": "&Цифрова клавіатура ходить і оглядає\tCtrl+Shift+W",
-        "defkeys.on": "Рух цифровою клавіатурою увімкнено.",
-        "defkeys.off": "Рух цифровою клавіатурою вимкнено.",
+        "menu.defkeys": "Виконувати &скрипт гравця з веб-клієнта (цифрова клавіатура, команди і тригери скрипту)\tCtrl+Shift+W",
+        "script.error": "Скрипт гравця не завантажився: %s",
+        "defkeys.on": "Скрипт гравця увімкнено.",
+        "defkeys.off": "Скрипт гравця вимкнено.",
         "sound.muted": "Звуки вимкнено.",
         "sound.unmuted": "Звуки увімкнено.",
         "sound.volume": "Гучність %d відсотків.",
@@ -142,7 +144,7 @@ STRINGS = {
             "Ctrl+S читає здоровʼя, ману і рухи.\n"
             "Ctrl+пробіл доповнює слово, яке ти набираєш, словами з виводу, найновіші першими; ще раз - наступне, після останнього повертається набране.\n"
             "Стрілка вниз у порожньому полі команди підставляє найновішу команду, яку запропонувала гра, наприклад підказку; ще раз вниз - старіші, вгору - назад.\n"
-            "Цифрова клавіатура 8, 2, 4, 6, 9 і 1 веде на північ, південь, захід, схід, вгору і вниз, 5 оглядає, Alt з напрямком оглядає в той бік. Ctrl+Shift+W вимикає це.\n"
+            "Тут працює і скрипт гравця з веб-клієнта: типово цифрова клавіатура 8, 2, 4, 6, 9 і 1 веде на північ, південь, захід, схід, вгору і вниз, 5 оглядає, Alt з напрямком оглядає в той бік, тильда запускає автобаф. Твій власний скрипт, якщо ти змінював його у веб-клієнті, береться з сервера гри. Ctrl+Shift+W вимикає скрипт.\n"
             "Ctrl+1..Ctrl+9 читають 1-й..9-й рядок з кінця виводу, Ctrl+0 10-й.\n"
             "Ctrl+Shift+S вмикає і вимикає озвучення вхідного тексту.\n"
             "Ctrl+Shift+M вимикає звуки. Ctrl+Shift+стрілки вгору і вниз змінюють гучність.\n"
@@ -198,9 +200,10 @@ STRINGS = {
         "menu.echo": "Показывать отправленные &команды в выводе	Ctrl+Shift+E",
         "echo.on": "Отправленные команды показываются в выводе.",
         "echo.off": "Отправленные команды скрыты из вывода.",
-        "menu.defkeys": "&Цифровая клавиатура ходит и осматривает\tCtrl+Shift+W",
-        "defkeys.on": "Движение цифровой клавиатурой включено.",
-        "defkeys.off": "Движение цифровой клавиатурой выключено.",
+        "menu.defkeys": "Выполнять &скрипт игрока из веб-клиента (цифровая клавиатура, команды и триггеры скрипта)\tCtrl+Shift+W",
+        "script.error": "Скрипт игрока не загрузился: %s",
+        "defkeys.on": "Скрипт игрока включен.",
+        "defkeys.off": "Скрипт игрока выключен.",
         "sound.muted": "Звуки выключены.",
         "sound.unmuted": "Звуки включены.",
         "sound.volume": "Громкость %d процентов.",
@@ -215,7 +218,7 @@ STRINGS = {
             "Ctrl+S читает здоровье, ману и движение.\n"
             "Ctrl+пробел дополняет набираемое слово словами из вывода, самые новые первыми; еще раз - следующее, после последнего возвращается набранное.\n"
             "Стрелка вниз в пустом поле команды подставляет самую новую команду, которую предложила игра, например подсказку; еще раз вниз - более старые, вверх - назад.\n"
-            "Цифровая клавиатура 8, 2, 4, 6, 9 и 1 ведет на север, юг, запад, восток, вверх и вниз, 5 осматривает, Alt с направлением осматривает в ту сторону. Ctrl+Shift+W выключает это.\n"
+            "Здесь работает и скрипт игрока из веб-клиента: по умолчанию цифровая клавиатура 8, 2, 4, 6, 9 и 1 ведет на север, юг, запад, восток, вверх и вниз, 5 осматривает, Alt с направлением осматривает в ту сторону, тильда запускает автобафф. Твой собственный скрипт, если ты менял его в веб-клиенте, берется с сервера игры. Ctrl+Shift+W выключает скрипт.\n"
             "Ctrl+1..Ctrl+9 читают 1-ю..9-ю строку с конца вывода, Ctrl+0 10-ю.\n"
             "Ctrl+Shift+S включает и выключает озвучку входящего текста.\n"
             "Ctrl+Shift+M выключает звуки. Ctrl+Shift+стрелки вверх и вниз меняют громкость.\n"

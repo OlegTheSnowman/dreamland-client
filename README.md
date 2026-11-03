@@ -17,6 +17,10 @@ web client does:
 - Sounds follow the MUD Sound Protocol. The sound list is taken from the web
   client, and new sounds are downloaded from dreamland.rocks when the game asks
   for them.
+- The web client's player script runs here too, in a small JavaScript engine
+  (QuickJS) with no access to files or the network: the stock defaults.js from
+  dreamland.rocks, or the player's own copy from the game server. That gives
+  the keypad movement, the script's commands and its triggers.
 - English, Ukrainian and Russian for both the menus and the game.
 
 ## Running from source
