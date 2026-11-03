@@ -51,6 +51,9 @@ STRINGS = {
         "menu.echo": "Show sent &commands in the output	Ctrl+Shift+E",
         "echo.on": "Sent commands are shown in the output.",
         "echo.off": "Sent commands are hidden from the output.",
+        "menu.defkeys": "&Keypad walks and scans\tCtrl+Shift+W",
+        "defkeys.on": "Keypad movement on.",
+        "defkeys.off": "Keypad movement off.",
         "sound.muted": "Sounds muted.",
         "sound.unmuted": "Sounds on.",
         "sound.volume": "Volume %d percent.",
@@ -63,6 +66,8 @@ STRINGS = {
             "The Applications key or Shift+F10 in the output always opens that menu.\n"
             "Ctrl+L lists the clickable commands from recent output.\n"
             "Ctrl+S reads health, mana and moves.\n"
+            "Down arrow in an empty command field fills in the newest command the game offered, such as a hint; more Down presses go to older ones, Up comes back.\n"
+            "Keypad 8, 2, 4, 6, 9 and 1 walk north, south, west, east, up and down, 5 scans, Alt plus a direction scans that way. Ctrl+Shift+W turns this off.\n"
             "Ctrl+1 to Ctrl+9 read the 1st to 9th line from the end of the output, Ctrl+0 the 10th.\n"
             "Ctrl+Shift+S turns speech of incoming text on and off.\n"
             "Ctrl+Shift+M mutes sounds. Ctrl+Shift+Up and Down change the volume.\n"
@@ -117,6 +122,9 @@ STRINGS = {
         "menu.echo": "Показувати надіслані &команди у виводі	Ctrl+Shift+E",
         "echo.on": "Надіслані команди показуються у виводі.",
         "echo.off": "Надіслані команди приховано з виводу.",
+        "menu.defkeys": "&Цифрова клавіатура ходить і оглядає\tCtrl+Shift+W",
+        "defkeys.on": "Рух цифровою клавіатурою увімкнено.",
+        "defkeys.off": "Рух цифровою клавіатурою вимкнено.",
         "sound.muted": "Звуки вимкнено.",
         "sound.unmuted": "Звуки увімкнено.",
         "sound.volume": "Гучність %d відсотків.",
@@ -129,6 +137,8 @@ STRINGS = {
             "Клавіша контекстного меню або Shift+F10 у виводі завжди відкриває це меню.\n"
             "Ctrl+L показує команди з останнього виводу.\n"
             "Ctrl+S читає здоровʼя, ману і рухи.\n"
+            "Стрілка вниз у порожньому полі команди підставляє найновішу команду, яку запропонувала гра, наприклад підказку; ще раз вниз - старіші, вгору - назад.\n"
+            "Цифрова клавіатура 8, 2, 4, 6, 9 і 1 веде на північ, південь, захід, схід, вгору і вниз, 5 оглядає, Alt з напрямком оглядає в той бік. Ctrl+Shift+W вимикає це.\n"
             "Ctrl+1..Ctrl+9 читають 1-й..9-й рядок з кінця виводу, Ctrl+0 10-й.\n"
             "Ctrl+Shift+S вмикає і вимикає озвучення вхідного тексту.\n"
             "Ctrl+Shift+M вимикає звуки. Ctrl+Shift+стрілки вгору і вниз змінюють гучність.\n"
@@ -183,6 +193,9 @@ STRINGS = {
         "menu.echo": "Показывать отправленные &команды в выводе	Ctrl+Shift+E",
         "echo.on": "Отправленные команды показываются в выводе.",
         "echo.off": "Отправленные команды скрыты из вывода.",
+        "menu.defkeys": "&Цифровая клавиатура ходит и осматривает\tCtrl+Shift+W",
+        "defkeys.on": "Движение цифровой клавиатурой включено.",
+        "defkeys.off": "Движение цифровой клавиатурой выключено.",
         "sound.muted": "Звуки выключены.",
         "sound.unmuted": "Звуки включены.",
         "sound.volume": "Громкость %d процентов.",
@@ -195,6 +208,8 @@ STRINGS = {
             "Клавиша контекстного меню или Shift+F10 в выводе всегда открывает это меню.\n"
             "Ctrl+L показывает команды из последнего вывода.\n"
             "Ctrl+S читает здоровье, ману и движение.\n"
+            "Стрелка вниз в пустом поле команды подставляет самую новую команду, которую предложила игра, например подсказку; еще раз вниз - более старые, вверх - назад.\n"
+            "Цифровая клавиатура 8, 2, 4, 6, 9 и 1 ведет на север, юг, запад, восток, вверх и вниз, 5 осматривает, Alt с направлением осматривает в ту сторону. Ctrl+Shift+W выключает это.\n"
             "Ctrl+1..Ctrl+9 читают 1-ю..9-ю строку с конца вывода, Ctrl+0 10-ю.\n"
             "Ctrl+Shift+S включает и выключает озвучку входящего текста.\n"
             "Ctrl+Shift+M выключает звуки. Ctrl+Shift+стрелки вверх и вниз меняют громкость.\n"

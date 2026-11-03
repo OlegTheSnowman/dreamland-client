@@ -11,11 +11,17 @@ from . import prefs as prefs_mod
 from .connection import Connection, PROTO_VERSION
 from .i18n import GAME_MENU_CHOICE, LANGS, Tr
 from . import dialogs
+from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
 from .speech import Speech
 from .telnet import Telnet
+
+_DIRS = {"kp8": "north", "kp2": "south", "kp4": "west", "kp6": "east", "kp9": "up", "kp1": "down"}
+DEFAULT_KEYS = dict(_DIRS)
+DEFAULT_KEYS.update({"alt+" + k: "scan " + d for k, d in _DIRS.items()})
+DEFAULT_KEYS["kp5"] = "scan"
 
 MAX_LINES = 20000
 TRIM_LINES = 4000
@@ -56,6 +62,8 @@ class MainFrame(wx.Frame):
         self.lines = [["", []]]    # [text, links] per output line; last one is open
         self.history = list(self.prefs.get("history", []))[-HISTORY_MAX:]
         self.hist_pos = None
+        self.hints = []
+        self.hint_pos = None          # position while Down walks the offered commands
         self.prompt = {}
         self.lang_answered = False
         self.lang_menu_waiting = False
@@ -132,6 +140,10 @@ class MainFrame(wx.Frame):
         it.Check(bool(self.prefs.get("echo", True)))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_echo(), it)
         self.echo_item = it
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.defkeys"))
+        it.Check(bool(self.prefs.get("default_keys", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_default_keys(), it)
+        self.defkeys_item = it
         self._item(opts, tr("menu.volume_up"), lambda e: self.change_volume(10))
         self._item(opts, tr("menu.volume_down"), lambda e: self.change_volume(-10))
         mb.Append(opts, tr("menu.options"))
@@ -368,6 +380,7 @@ class MainFrame(wx.Frame):
             self.history.append(text)
             del self.history[:-HISTORY_MAX]
         self.hist_pos = None
+        self.hint_pos = None
 
     def send_command(self, text, echo_text=None, expand=False):
         self.echo(echo_text if echo_text is not None else text)
@@ -383,6 +396,8 @@ class MainFrame(wx.Frame):
         if self.run_macro(event):
             return
         key = event.GetKeyCode()
+        if key in (wx.WXK_UP, wx.WXK_DOWN) and not event.HasAnyModifiers() and self.browse_hints(key):
+            return
         if key in (wx.WXK_UP, wx.WXK_DOWN) and not event.HasAnyModifiers():
             self.keep_draft()
             if not self.history:
@@ -396,11 +411,57 @@ class MainFrame(wx.Frame):
             self.input.SetInsertionPointEnd()
             return
         if key == wx.WXK_ESCAPE:
-            self.keep_draft()
+            if self.hint_pos is None:
+                self.keep_draft()
+            self.hint_pos = None
             self.input.ChangeValue("")
             self.hist_pos = None
             return
         event.Skip()
+
+    def hint_commands(self):
+        """Commands offered in recent game text, newest first, each once."""
+        out, seen = [], set()
+        for text, links in reversed(self.lines[-LINK_LIST_LINES:]):
+            for l in reversed(links):
+                if l.command and not l.menu and not l.url and l.command not in seen:
+                    seen.add(l.command)
+                    out.append(l.command)
+        return out
+
+    def browse_hints(self, key):
+        """Down in an empty field walks the commands the game offered.
+
+        Down starts at the newest and goes to older ones, Up comes back; Up
+        past the newest leaves an empty field. Returns False when the key is
+        not for hints, so the history gets it.
+        """
+        at_history_end = self.hist_pos is None or self.hist_pos >= len(self.history)
+        if self.hint_pos is None:
+            if key != wx.WXK_DOWN or self.input.GetValue() or not at_history_end:
+                return False
+            self.hints = self.hint_commands()
+            if not self.hints:
+                self.say(self.tr("links.empty"))
+                return True
+            self.hint_pos = 0
+        elif self.input.GetValue() != self.hints[self.hint_pos]:
+            # The player edited the hint: it is a draft now, not a hint.
+            self.hint_pos = None
+            return False
+        else:
+            self.hint_pos += 1 if key == wx.WXK_DOWN else -1
+            if self.hint_pos < 0:
+                self.hint_pos = None
+                self.input.ChangeValue("")
+                self.say(self.tr("input.name"))
+                return True
+            self.hint_pos = min(self.hint_pos, len(self.hints) - 1)
+        value = self.hints[self.hint_pos]
+        self.input.ChangeValue(value)
+        self.input.SetInsertionPointEnd()
+        self.say(value)
+        return True
 
     def keep_draft(self):
         """Put typed but unsent text into the history, so Up finds it again."""
@@ -491,16 +552,20 @@ class MainFrame(wx.Frame):
         self.output.SetStyle(start, end, attr)
 
     def run_macro(self, event):
-        if not self.macros.known:
-            return False
         name = dialogs.key_from_event(event)
         if not name:
             return False
-        cmd = self.macros.command_for(name)
-        if cmd is None:
-            fallback = dialogs.key_fallback_from_event(event)
-            if fallback:
-                cmd = self.macros.command_for(fallback)
+        cmd = None
+        if self.macros.known:
+            cmd = self.macros.command_for(name)
+            if cmd is None:
+                fallback = dialogs.key_fallback_from_event(event)
+                if fallback:
+                    cmd = self.macros.command_for(fallback)
+        if cmd is None and self.prefs.get("default_keys", True):
+            # The web client's default script: the keypad walks, 5 scans,
+            # Alt plus a direction scans that way. Player macros come first.
+            cmd = DEFAULT_KEYS.get(name)
         if cmd is None:
             return False
         line = expand_vars(cmd, self.vars)
@@ -732,6 +797,11 @@ class MainFrame(wx.Frame):
         self.echo_item.Check(self.prefs["echo"])
         self.say(self.tr("echo.on" if self.prefs["echo"] else "echo.off"))
 
+    def toggle_default_keys(self):
+        self.prefs["default_keys"] = not self.prefs.get("default_keys", True)
+        self.defkeys_item.Check(self.prefs["default_keys"])
+        self.say(self.tr("defkeys.on" if self.prefs["default_keys"] else "defkeys.off"))
+
     def toggle_mute(self):
         s = self.prefs["sound"]
         s["mute"] = not s.get("mute")
@@ -780,24 +850,6 @@ class MainFrame(wx.Frame):
         self.conn.disconnect()
         self.sound.stop_all()
         event.Skip()
-
-
-class NamedAccessible(wx.Accessible):
-    """Gives a control its spoken name without a visible label next to it.
-
-    Only the name is answered here; role, value and the rest still come from
-    the native control.
-    """
-
-    def __init__(self, ctrl, name):
-        super().__init__(ctrl)
-        self.name = name
-        ctrl.SetAccessible(self)
-
-    def GetName(self, childId):
-        if childId == 0:
-            return (wx.ACC_OK, self.name)
-        return (wx.ACC_NOT_IMPLEMENTED, "")
 
 
 EM_SETPASSWORDCHAR = 0xCC

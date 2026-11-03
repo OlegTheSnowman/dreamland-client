@@ -7,6 +7,7 @@ DEFAULTS = {
     "lang": "en",
     "speech": True,
     "echo": True,
+    "default_keys": True,
     "sound": {
         "mute": False,
         "master": 80,
