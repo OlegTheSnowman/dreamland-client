@@ -350,6 +350,10 @@ class MainFrame(wx.Frame):
     def on_console(self, raw):
         text = self.telnet.process(raw)
         self.set_password_mode(self.telnet.echo_off or self.nanny_password)
+        if self.telnet.echo_off:
+            # An existing character's password is asked for by turning echo
+            # off, with no nanny_step: that is the password question too.
+            self.auto_login("password")
         if not text:
             return
         if not self.lang_answered and "Choose your language" in text:
