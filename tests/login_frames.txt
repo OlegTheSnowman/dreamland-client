@@ -1,0 +1,16 @@
+OPEN
+{"args":["DreamLand Web Client/2.1","FUTnp1YW"],"command":"version"}
+
+{"args":[true],"command":"msp"}
+
+{"args":["\r\n\u001B[0;0H\u001B[2J<c c='fgbr'>&gt;</c><c c='fgdx'> </c>"],"command":"console_out"}
+
+{"args":["\r\n<c c='fgbw'>Welcome to Dreamland!</c><c c='fgdx'> Choose your language:\r\n</c><c c='fgbd'>[CHOICE 1]: </c><c c='fgdy'></c><hc><c c='fgdy'>english</c></hc><c c='fgdy'></c><c c='fgdx'>\n</c><c c='fgbd'>[CHOICE 2]: </c><c c='fgdy'></c><hc><c c='fgdy'>українська</c></hc><c c='fgdy'></c><c c='fgdx'>\n</c><c c='fgbd'>[CHOICE 3]: </c><c c='fgdy'></c><hc><c c='fgdy'>русский</c></hc><c c='fgdy'></c><c c='fgdx'>\n</c>Type the number or click an option from the list.\r\n<c c='fgbr'>&gt;</c><c c='fgdx'> </c>"],"command":"console_out"}
+
+{"args":["You say '<c c='fgdg'>en</c><c c='fgdx'>'\n</c><c c='fgbr'>&gt;</c><c c='fgdx'> </c>"],"command":"console_out"}
+
+{"args":["name"],"command":"nanny_step"}
+
+{"args":["Enter an existing character name, or come up with a new one.\n<c c='fgbr'>&gt;</c><c c='fgdx'> </c>"],"command":"console_out"}
+
+CLOSED

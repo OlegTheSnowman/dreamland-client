@@ -1,0 +1,4 @@
+wxPython>=4.2
+websocket-client>=1.8
+pygame-ce>=2.5
+accessible_output2>=0.17
