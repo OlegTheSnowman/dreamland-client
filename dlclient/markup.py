@@ -16,7 +16,7 @@ MSP_RE = re.compile(r"^!!(SOUND|MUSIC)\(([^)\n]*)\)[ \t]*$")
 
 
 def safe_explicit_action(value):
-    if value and any(r.match(value) for r in SAFE_HC_COMMANDS):
+    if value and any(r.fullmatch(value) for r in SAFE_HC_COMMANDS):
         return value
     return None
 
@@ -114,7 +114,7 @@ class _Parser(HTMLParser):
         if tag == "hc":
             explicit = safe_explicit_action(attrs.get("cmd"))
             link.command = explicit or stripped
-            link.confirm = bool(explicit and re.match(r"^craft \d+$", explicit))
+            link.confirm = bool(explicit and re.fullmatch(r"craft \d+", explicit))
         elif tag == "hh":
             link.command = "help " + (attrs.get("id") or stripped)
         elif tag == "hg":
