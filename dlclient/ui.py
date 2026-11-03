@@ -120,6 +120,10 @@ class MainFrame(wx.Frame):
         it.Check(bool(self.prefs["sound"].get("mute")))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_mute(), it)
         self.mute_item = it
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.echo"))
+        it.Check(bool(self.prefs.get("echo", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_echo(), it)
+        self.echo_item = it
         self._item(opts, tr("menu.volume_up"), lambda e: self.change_volume(10))
         self._item(opts, tr("menu.volume_down"), lambda e: self.change_volume(-10))
         mb.Append(opts, tr("menu.options"))
@@ -326,6 +330,8 @@ class MainFrame(wx.Frame):
             self.speech.say(text)
 
     def echo(self, text):
+        if not self.prefs.get("echo", True):
+            return
         if self.lines[-1][0] and not self.lines[-1][0].endswith(" "):
             self.append_lines([Line(" ", [])], False)
         self.append_lines([Line(text, [])], True)
@@ -700,6 +706,11 @@ class MainFrame(wx.Frame):
         self.prefs["speech"] = not self.prefs.get("speech")
         self.speech_item.Check(self.prefs["speech"])
         self.say(self.tr("speech.on" if self.prefs["speech"] else "speech.off"))
+
+    def toggle_echo(self):
+        self.prefs["echo"] = not self.prefs.get("echo", True)
+        self.echo_item.Check(self.prefs["echo"])
+        self.say(self.tr("echo.on" if self.prefs["echo"] else "echo.off"))
 
     def toggle_mute(self):
         s = self.prefs["sound"]

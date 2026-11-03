@@ -6,6 +6,7 @@ import os
 DEFAULTS = {
     "lang": "en",
     "speech": True,
+    "echo": True,
     "sound": {
         "mute": False,
         "master": 80,
