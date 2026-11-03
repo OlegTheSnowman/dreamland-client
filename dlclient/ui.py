@@ -79,7 +79,7 @@ class MainFrame(wx.Frame):
         )
         self.script_asked = False
         if self.prefs.get("default_keys", True):
-            self.script.load(self.script.stock_text(), "stock")
+            self.script.load_stock()
         if not os.environ.get("DLCLIENT_QUIET"):
             threading.Thread(target=self._update_script, daemon=True).start()
 
@@ -91,6 +91,8 @@ class MainFrame(wx.Frame):
         self.hint_lines = {}
         self.hint_pos = None
         self.walk_until = 0
+        self.walk_name = ""
+        self.sound_fetching = set()
         self.completion = None
         self.prompt = {}
         self.prompt_due = False
@@ -246,10 +248,14 @@ class MainFrame(wx.Frame):
     def _sound_missing(self, kind, name, opts):
         url = (opts or {}).get("U")
         if url:
+            full = url if url.lower().endswith((".mp3", ".ogg", ".wav")) else url.rstrip("/") + "/" + name
+            if full in self.sound_fetching:
+                return
+            self.sound_fetching.add(full)
+
             def get():
                 try:
-                    full = url if url.lower().endswith((".mp3", ".ogg", ".wav")) else url.rstrip("/") + "/" + name
-                    got = fetch_from_url(full, self.sound_live)
+                    got = fetch_from_url(full, self.sound_live, os.path.join(self.app_dir, "sounds"))
                 except Exception:
                     got = None
                 if got:
@@ -380,11 +386,12 @@ class MainFrame(wx.Frame):
         starts = self.append_lines(lines, complete)
         self.run_triggers(lines, starts)
         if self.walk_until and time.time() < self.walk_until:
-            route = next((l.command for line in lines for l in line.links
-                          if l.command.startswith("run ")), None)
-            if route:
-                self.walk_until = 0
-                self.send_command(route)
+            head = "'%s'" % self.walk_name
+            for line in lines:
+                if line.text.strip().startswith(head) and line.links:
+                    self.walk_until = 0
+                    self.send_command("|".join(l.command for l in line.links if l.command))
+                    break
         if self.prefs.get("speech"):
             spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">")
             self.speech.say(spoken)
@@ -729,7 +736,7 @@ class MainFrame(wx.Frame):
                 if self.script.on_key(which, code, event.ControlDown(),
                                       event.AltDown(), event.ShiftDown()):
                     return True
-            elif not self.script.available:
+            elif not self.script.ctx:
                 cmd = DEFAULT_KEYS.get(name)
         if cmd is None:
             return False
@@ -984,7 +991,7 @@ class MainFrame(wx.Frame):
             return self.say(self.tr("rooms.offline"))
         dlg = dialogs.RoomsDialog(self, self.tr, rooms)
         if dlg.ShowModal() == wx.ID_OK and dlg.choice:
-            vnum, how = dlg.choice
+            vnum, how, self.walk_name = dlg.choice
             self.walk_until = time.time() + 5 if how == dlg.WALK else 0
             self.send_command("path %d" % vnum)
         dlg.Destroy()
@@ -1026,7 +1033,7 @@ class MainFrame(wx.Frame):
         self.prefs["default_keys"] = not self.prefs.get("default_keys", True)
         self.defkeys_item.Check(self.prefs["default_keys"])
         if self.prefs["default_keys"]:
-            self.script.load(self.script.stock_text(), "stock")
+            self.script.load_stock()
             self.script_asked = False
         else:
             self.script.ctx = None

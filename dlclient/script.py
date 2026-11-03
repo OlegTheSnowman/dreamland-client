@@ -109,10 +109,21 @@ class ScriptHost:
                 continue
         return ""
 
+    def load_stock(self):
+        if self.load(self.stock_text(), "stock"):
+            return True
+        try:
+            with open(self.bundled, encoding="utf-8") as f:
+                return self.load(f.read(), "stock")
+        except OSError:
+            return False
+
     def fetch_stock(self, timeout=15):
         req = urllib.request.Request(STOCK_URL, headers={"User-Agent": "DreamLand desktop client"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             body = r.read(1_000_000).decode("utf-8")
+        if body.lstrip().startswith("<"):
+            raise ValueError("not a script")
         os.makedirs(self.cache_dir, exist_ok=True)
         tmp = os.path.join(self.cache_dir, "defaults.js.part")
         with open(tmp, "w", encoding="utf-8") as f:

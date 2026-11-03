@@ -235,8 +235,6 @@ class TriggersDialog(ListManager):
                 from .scripting import new_id
                 new["id"] = new_id()
             target = dlg.result_scope
-            if scope and scope != target:
-                self.store.set_list(scope, [x for x in self.store.lists[scope] if x is not trig])
             lst = list(self.store.lists[target])
             if trig is not None and scope == target:
                 lst = [new if x is trig else x for x in lst]
@@ -246,6 +244,8 @@ class TriggersDialog(ListManager):
                     dlg.Destroy()
                     return
                 lst.append(new)
+                if scope:
+                    self.store.set_list(scope, [x for x in self.store.lists[scope] if x is not trig])
             self.store.set_list(target, lst)
             self.refresh()
         dlg.Destroy()
@@ -372,12 +372,12 @@ class MacrosDialog(ListManager):
                         self.store.account, self.say)
         if dlg.ShowModal() == wx.ID_OK:
             new, target = dlg.result, dlg.result_scope
-            if scope:
-                self.store.set_list(scope, [x for x in self.store.lists[scope] if x is not macro])
-            lst = [x for x in self.store.lists[target] if x["key"] != new["key"]]
+            lst = [x for x in self.store.lists[target] if x["key"] != new["key"] and x is not macro]
             if len(lst) >= self.store.max_items:
                 message(self, self.tr("list.full"), self.tr(self.title_key))
             else:
+                if scope and scope != target:
+                    self.store.set_list(scope, [x for x in self.store.lists[scope] if x is not macro])
                 self.store.set_list(target, lst + [new])
             self.refresh()
         dlg.Destroy()
@@ -901,5 +901,5 @@ class RoomsDialog(wx.Dialog):
     def done(self, how):
         i = self.list.GetSelection()
         if 0 <= i < len(self.shown):
-            self.choice = (self.shown[i][0], how)
+            self.choice = (self.shown[i][0], how, self.shown[i][1])
             self.EndModal(wx.ID_OK)
