@@ -630,7 +630,7 @@ class SettingsDialog(wx.Dialog):
         if kind == "bool":
             c = wx.CheckBox(p, label=label)
             c.SetValue(bool(value) and value not in ("0", "off", "false"))
-            c.Bind(wx.EVT_CHECKBOX, lambda e, k=key, c=c: self.send(k, "1" if c.GetValue() else "0"))
+            c.Bind(wx.EVT_CHECKBOX, lambda e, k=key, c=c: self.send(k, "on" if c.GetValue() else "off"))
             s.Add(c, 0, wx.ALL, 6)
         elif kind == "enum":
             vals = opt.get("values") or []
