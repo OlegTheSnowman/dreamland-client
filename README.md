@@ -43,3 +43,8 @@ python -m unittest discover -s tests
 
 The bundled sounds come from the mudjs repository and are all CC0. Help, Sound
 credits in the client lists each one with its author and source.
+
+## License
+
+GPL-3.0, like the web client mudjs, whose player script (dlclient/defaults.js) is
+bundled here and whose behaviour this client follows. The sounds are CC0.
