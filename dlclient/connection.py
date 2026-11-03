@@ -106,7 +106,15 @@ class Connection:
         if self.resume_token:
             self.resume_pending = True
             self.rpc("resume", self.resume_token)
+        else:
+            self._answer_codepage()
         threading.Thread(target=self._keepalive, args=(ws,), daemon=True).start()
+
+    def _answer_codepage(self):
+        # The server's first, unseen question is the codepage; 1 is KOI8-R,
+        # the one the web protocol and our telnet decoding expect (mudjs
+        # websock.js answerFreshSocket). The language menu comes after it.
+        self.send_line("1")
 
     def _keepalive(self, ws):
         while self.ws is ws and ws.sock and ws.sock.connected:
@@ -147,4 +155,6 @@ class Connection:
                 return
             self.resume_token = None
             self.resume_pending = False
+            # Back at the start of a login: the codepage question is waiting.
+            self._answer_codepage()
         self.on_frame(command, args)
