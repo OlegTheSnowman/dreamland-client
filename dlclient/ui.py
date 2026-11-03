@@ -91,6 +91,14 @@ class MainFrame(wx.Frame):
         self.output.Bind(wx.EVT_CHAR, self.on_output_char)
         self.output.Bind(wx.EVT_CONTEXT_MENU, lambda e: self.line_menu(always_menu=True))
 
+        # Ctrl+1 to Ctrl+9 read the 1st to 9th line from the end, Ctrl+0 the 10th.
+        accel = []
+        for n in range(1, 11):
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, n=n: self.read_recent(n), id=ident)
+            accel.append((wx.ACCEL_CTRL, ord(str(n % 10)), ident))
+        self.SetAcceleratorTable(wx.AcceleratorTable(accel))
+
     def _build_menu(self):
         tr = self.tr
         mb = wx.MenuBar()
@@ -692,6 +700,18 @@ class MainFrame(wx.Frame):
         if p.get("fight"):
             s += " " + self.tr("status.fighting")
         return s
+
+    def read_recent(self, n):
+        """Speak the n-th line from the end, skipping blank lines and bare prompts."""
+        seen = 0
+        for text, _ in reversed(self.lines):
+            t = text.strip()
+            if not t or t == ">":
+                continue
+            seen += 1
+            if seen == n:
+                return self.say(t)
+        self.say(self.tr("recent.none"))
 
     def read_status(self):
         self.say(self.status_text(), interrupt=True)
