@@ -3,6 +3,7 @@ import json
 import os
 import random
 import re
+import threading
 import urllib.request
 
 LIVE_BASE = "https://dreamland.rocks/play/sounds/"
@@ -121,7 +122,7 @@ class SoundPlayer:
         loops = _int(opts.get("L"), -1, 100, 1) or 1
         p = _int(opts.get("P"), 0, 100, 50)
         kind = (opts.get("T") or entry.get("type") or "alert").lower()
-        if self.effect_channel.get_busy() and self.effect and p <= self.effect:
+        if self.effect_channel.get_busy() and self.effect is not None and p <= self.effect:
             return
         try:
             snd = self._sound(entry)
@@ -191,11 +192,23 @@ def fetch_live_library(live_folder, bundled_folder, timeout=15):
             continue
         os.makedirs(os.path.dirname(target), exist_ok=True)
         req = urllib.request.Request(LIVE_BASE + f, headers={"User-Agent": "DreamLand desktop client"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            body = r.read(5_000_000)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                body = r.read(5_000_000)
+        except OSError:
+            continue
         with open(target + ".part", "wb") as out:
             out.write(body)
         os.replace(target + ".part", target)
+    old = os.path.join(live_folder, "manifest.json")
+    try:
+        with open(old, encoding="utf-8") as f:
+            fetched = [x for x in json.load(f).get("sounds", []) if str(x.get("name", "")).startswith("server/")]
+    except (OSError, ValueError):
+        fetched = []
+    if fetched:
+        data["sounds"] = sounds + [x for x in fetched if x["name"] not in {s.get("name") for s in sounds}]
+        raw = json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8")
     tmp = os.path.join(live_folder, "manifest.json.part")
     with open(tmp, "wb") as out:
         out.write(raw)
@@ -203,7 +216,10 @@ def fetch_live_library(live_folder, bundled_folder, timeout=15):
     return True
 
 
-def fetch_from_url(url, live_folder, timeout=15):
+_manifest_lock = threading.Lock()
+
+
+def fetch_from_url(url, live_folder, bundled_folder, timeout=15):
     from urllib.parse import urlparse
     u = urlparse(url)
     if u.scheme != "https" or u.hostname not in ("dreamland.rocks", "www.dreamland.rocks"):
@@ -221,15 +237,20 @@ def fetch_from_url(url, live_folder, timeout=15):
     os.replace(target + ".part", target)
     name = "server/" + base.rsplit(".", 1)[0]
     path = os.path.join(live_folder, "manifest.json")
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        data = {"sounds": []}
-    sounds = [x for x in data.get("sounds", []) if x.get("name") != name]
-    sounds.append({"name": name, "type": "alert", "file": "server/" + base, "source": url})
-    data["sounds"] = sounds
-    with open(path + ".part", "w", encoding="utf-8") as out:
-        json.dump(data, out, ensure_ascii=False, indent=1)
-    os.replace(path + ".part", path)
+    with _manifest_lock:
+        data = None
+        for source in (path, os.path.join(bundled_folder, "manifest.json")):
+            try:
+                with open(source, encoding="utf-8") as f:
+                    data = json.load(f)
+                break
+            except (OSError, ValueError):
+                continue
+        data = data if isinstance(data, dict) else {"sounds": []}
+        sounds = [x for x in data.get("sounds", []) if x.get("name") != name]
+        sounds.append({"name": name, "type": "alert", "file": "server/" + base, "source": url})
+        data["sounds"] = sounds
+        with open(path + ".part", "w", encoding="utf-8") as out:
+            json.dump(data, out, ensure_ascii=False, indent=1)
+        os.replace(path + ".part", path)
     return name
