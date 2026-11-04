@@ -19,6 +19,8 @@ from . import creds
 from .areamap import MARKET_SQUARE, MIDGAARD, NoMap, area_key, fetch_areas, fetch_graph, fetch_rooms
 from .mapview import AreaMap
 from .helpsearch import HelpSearch
+from . import status as status_mod
+from .scripting import new_id
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -178,6 +180,13 @@ class MainFrame(wx.Frame):
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, fn=fn: fn(), id=ident)
             accel.append((wx.ACCEL_ALT, key, ident))
+        for n, (key, _fn) in enumerate(status_mod.PANELS, start=1):
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, k=key: self.read_panel(k), id=ident)
+            accel.append((wx.ACCEL_ALT, ord(str(n)), ident))
+        ident = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, lambda e: self.fight_menu(), id=ident)
+        accel.append((wx.ACCEL_ALT, ord("8"), ident))
         for flags, key, fn in ((wx.ACCEL_CTRL, ord("="), lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, wx.WXK_NUMPAD_ADD, lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, ord("-"), lambda: self.change_font(-1)),
@@ -202,6 +211,12 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
         self._item(game, tr("menu.areas"), lambda e: self.open_areas())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
+        panels = wx.Menu()
+        self._item(panels, tr("menu.panel.all"), lambda e: self.show_panels())
+        for key, _fn in status_mod.PANELS:
+            self._item(panels, tr("menu.panel." + key).split("\t")[0], lambda e, k=key: self.read_panel(k))
+        self._item(panels, tr("menu.panel.fight").split("\t")[0], lambda e: self.fight_menu())
+        game.AppendSubMenu(panels, tr("menu.panels"))
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
         self._item(game, tr("menu.findnext"), lambda e: self.find_step(-1))
@@ -453,6 +468,10 @@ class MainFrame(wx.Frame):
             self.on_script_saved(args[0])
         elif command == "account_chars" and args and isinstance(args[0], dict):
             self.on_account_chars(args[0])
+        elif command == "notify" and args:
+            self.on_notify(str(args[0]))
+        elif command == "boss_phase" and args:
+            self.on_boss_phase(str(args[0]))
         elif command == "alert" and args:
             self.notice(str(args[0]))
 
@@ -884,6 +903,12 @@ class MainFrame(wx.Frame):
             return self.hash_var(rest)
         if low in ("hotkey", "кнопка", "клавіша"):
             return self.hash_hotkey(rest)
+        if low in ("action", "триггер", "тригер"):
+            return self.hash_action(rest)
+        if low in ("help", "помощь", "допомога"):
+            return self.notice(self.tr("hash.help"))
+        if low in ("autobuff", "автобафф", "автобаф"):
+            return self.open_autobuff()
         self.notice(self.tr("hash.unknown"))
 
     def hash_var(self, rest):
@@ -1301,6 +1326,74 @@ class MainFrame(wx.Frame):
         else:
             hidden = (char.get("profile") or {}).get("hidden")
             self.send_command("account profile %s %s" % ("show" if hidden else "hide", name))
+
+    def read_panel(self, key):
+        fn = dict(status_mod.PANELS)[key]
+        self.say(fn(self.prompt, self.tr))
+
+    def show_panels(self):
+        self.show_text(self.tr("panels.title"), status_mod.everything(self.prompt, self.tr))
+
+    def fight_menu(self):
+        cmds = status_mod.fight_commands(self.prompt)
+        if not cmds:
+            return self.say(self.tr("fight.none"))
+        menu = wx.Menu()
+        for cmd in cmds:
+            it = menu.Append(wx.ID_ANY, cmd)
+            self.Bind(wx.EVT_MENU, lambda e, c=cmd: self.send_command(c), it)
+        self.PopupMenu(menu)
+        menu.Destroy()
+
+    def on_notify(self, text):
+        text = status_mod.clean(text)
+        self.sound.play("ui/notify", {"T": "ui"})
+        if self.IsActive():
+            return
+        self.RequestUserAttention()
+        try:
+            import wx.adv
+            note = wx.adv.NotificationMessage(self.tr("notify.title"), text, self)
+            note.Show()
+        except Exception:
+            pass
+
+    def on_boss_phase(self, kind):
+        if kind not in ("control", "panic"):
+            return
+        self.sound.play("alert/raid", {"T": "alert"})
+        self.notice(self.tr("boss." + kind))
+
+    def hash_action(self, rest):
+        if not self.triggers.known:
+            return self.notice(self.tr("hash.wait"))
+        m = re.fullmatch(r"\{(.+?)\}\s*\{(.*)\}", rest.strip())
+        mine = list(self.triggers.lists.get("char") or [])
+        if m:
+            pattern, action = m.group(1).strip(), m.group(2).strip()
+            if action.lower() in ("delete", "удалить", "видалити"):
+                kept = [t for t in mine if t.get("pattern") != pattern]
+                self.triggers.set_list("char", kept)
+                return self.notice(self.tr("hash.action.deleted", len(mine) - len(kept)))
+            if not pattern or not action:
+                return self.notice(self.tr("hash.action.usage"))
+            if len(mine) >= self.triggers.max_items:
+                return self.notice(self.tr("list.full"))
+            mine.append({"id": new_id(), "pattern": pattern, "cmd": action})
+            self.triggers.set_list("char", mine)
+            return self.notice(self.tr("hash.action.set", pattern, action))
+        words = rest.split()
+        if words and words[-1].lower() in ("delete", "удалить", "видалити"):
+            needle = " ".join(words[:-1]).lower()
+            kept = [t for t in mine if needle not in (t.get("pattern") or "").lower()]
+            self.triggers.set_list("char", kept)
+            return self.notice(self.tr("hash.action.deleted", len(mine) - len(kept)))
+        needle = rest.strip().lower()
+        rows = [t for t in mine if needle in (t.get("pattern") or "").lower()]
+        if not rows:
+            return self.notice(self.tr("hash.action.none", rest.strip()) if needle else self.tr("hash.action.empty"))
+        return self.notice(self.tr("hash.action.list") + "\n" + "\n".join(
+            "    {%s} {%s}" % (t.get("pattern", ""), t.get("cmd", "")) for t in rows))
 
     def read_recent(self, n):
         seen = 0
