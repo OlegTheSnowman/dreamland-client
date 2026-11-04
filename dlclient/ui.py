@@ -1517,10 +1517,25 @@ class MainFrame(wx.Frame):
                         "timer": wx.CallLater(3000, self.finish_capture)}
         self.send_command(command, echo=False)
 
-    def show_help(self, command):
+    INFO_VERBS = {"help", "look", "l", "examine", "exa", "read", "consider", "con", "whois", "compare",
+                  "properties", "lore", "score", "affects", "effects", "worth"}
+
+    @classmethod
+    def is_info(cls, command):
+        words = command.lower().split()
+        if not words or "in" in words[1:2]:
+            return False
+        if words[0] in cls.INFO_VERBS:
+            return True
+        if words[0] == "quest" and len(words) == 2 and (words[1].isdigit() or words[1] == "info"):
+            return True
+        return len(words) > 1 and words[1] in ("read", "look", "info", "show")
+
+    def show_help(self, command, title=None):
         if self.capture and self.capture.get("timer"):
             self.capture["timer"].Stop()
-        self.capture = {"kind": "__text__", "title": command.split(" ", 1)[1].strip(), "lines": [],
+        title = title or (command.split(" ", 1) + [command])[1].strip()
+        self.capture = {"kind": "__text__", "title": title, "lines": [],
                         "command": command, "timer": wx.CallLater(3000, self.finish_capture)}
         self.send_command(command, echo=False)
 
@@ -1595,9 +1610,8 @@ class MainFrame(wx.Frame):
                 self.input.ChangeValue(cmds[0].split(" ", 1)[1] + " ")
                 self.input.SetInsertionPointEnd()
                 return wx.CallAfter(self.say, self.tr("tl.typetarget"))
-            helps = [c for c in cmds if c.lower().startswith("help ")]
-            if helps and self.items_dlg:
-                return self.show_help(helps[0])
+            if len(cmds) == 1 and self.is_info(cmds[0]) and self.items_dlg:
+                return self.show_help(cmds[0], row.get("label"))
             if row.get("close") and self.items_dlg:
                 self.items_dlg.EndModal(wx.ID_OK)
             for cmd in cmds:
@@ -1606,6 +1620,8 @@ class MainFrame(wx.Frame):
                 self.refresh_items(len(cmds))
             return
         if how == "command":
+            if self.is_info(what) and self.items_dlg:
+                return self.show_help(what, row.get("label"))
             self.send_command(what)
             return self.refresh_items(1)
         if "tell" in what:
@@ -1615,6 +1631,9 @@ class MainFrame(wx.Frame):
             self.input.ChangeValue("tell %s " % target)
             self.input.SetInsertionPointEnd()
             return wx.CallAfter(self.say, self.tr("items.tell", target))
+        if len(what) == 1 and what[0] in self.INFO_VERBS and self.items_dlg and row.get("ident"):
+            target = row["ident"] if row["kind"] != "player" else row["name"]
+            return self.show_help("%s %s" % (what[0], target), row.get("label"))
         sent = self.item_verbs(what, row)
         if set(what) & self.REFRESH_VERBS:
             self.refresh_items(sent)
