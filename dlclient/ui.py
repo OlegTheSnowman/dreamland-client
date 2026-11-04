@@ -1452,14 +1452,19 @@ class MainFrame(wx.Frame):
             ("shop", "list список ассортимент асортимент"),
             ("services", "service услуга послуга"),
             ("training", "train gain тренировать тренировки тренувати тренування"),
-            ("skills", "prac practice практиковать практикувати")):
+            ("skills", "prac practice практиковать практикувати"),
+            ("skilltable", "skills умения вміння"),
+            ("questshop", "quest|list квест|список"),
+            ("questrequest", "quest|request квест|попросить квест|попросити"),
+            ("zonequests", "quest квест"),
+            ("areas", "areas зоны зони")):
         for _w in _words.split():
-            TYPED[_w] = _kind
+            TYPED[_w.replace("|", " ")] = _kind
 
     def typed_list(self, text):
         if not self.prefs.get("list_menus", True) or not self.conn.in_world or self.capture or self.items_dlg:
             return False
-        kind = self.TYPED.get(text.strip().lower())
+        kind = self.TYPED.get(" ".join(text.lower().split()))
         if not kind:
             return False
         self.open_items(kind)
