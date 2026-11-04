@@ -1484,6 +1484,10 @@ class MainFrame(wx.Frame):
         words = text.lower().split()
         kind = self.TYPED.get(" ".join(words))
         command = " ".join(text.split())
+        if len(words) > 2 and words[0] in ("l", "lo", "loo", "look") and words[1] == "in":
+            target = " ".join(text.split()[2:])
+            self.open_items("container", command, target, container=target)
+            return True
         if not kind and len(words) > 1:
             first = self.TYPED.get(words[0])
             if first in self.TYPED_WITH_ARGS:
