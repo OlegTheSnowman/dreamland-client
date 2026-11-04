@@ -1516,6 +1516,18 @@ class MainFrame(wx.Frame):
                              "kind": kind, "name": link.label, "container": cap.get("container")})
                 if cap["kind"] != "who":
                     break
+        if not rows and not self.items_dlg:
+            shown = [l for l in cap["lines"] if l.text.strip()]
+            if shown:
+                if self.lines[-1][0]:
+                    self.append_lines([], True)
+                self.append_lines(shown, True)
+                if self.prefs.get("speech"):
+                    self.speech.say("
+".join(l.text for l in shown))
+            else:
+                self.say(self.tr("items.none"))
+            return
         self.items_view = cap
         if self.items_dlg:
             return self.items_dlg.set_rows(cap["title"], rows, keys_text)
