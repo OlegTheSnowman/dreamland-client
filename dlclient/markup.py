@@ -74,6 +74,23 @@ def _brackets_to_tags(s, nonce):
     return s
 
 
+LOOK_HINT = re.compile(r"^(?:You can look at|Можна подивитися|Можно посмотреть): [^.]*\.(?=\s*\S)")
+
+
+def split_look_hint(line):
+    m = LOOK_HINT.match(line.text)
+    if not m:
+        return [line]
+    cut = m.end()
+    rest = len(line.text) - len(line.text[cut:].lstrip())
+    first = Line(line.text[:cut], [l for l in line.links if l.end <= cut],
+                 [(a, min(b, cut), c) for a, b, c in line.colors if a < cut])
+    moved = [Link(l.start - rest, l.end - rest, l.label, l.command, l.url, l.menu, l.confirm, l.ident)
+             for l in line.links if l.start >= rest]
+    second = Line(line.text[rest:], moved, [(max(a, rest) - rest, b - rest, c) for a, b, c in line.colors if b > rest])
+    return [first, second]
+
+
 class _Parser(HTMLParser):
     LINK_TAGS = {"hc", "hh", "hg", "hs", "hl", "m", "x"}
 
@@ -204,7 +221,7 @@ class OutputParser:
                      for l in p.links if l.start >= offset and l.end <= end]
             colors = [(max(a, offset) - offset, min(b, end) - offset, c)
                       for a, b, c in p.colors if a < end and b > offset]
-            lines.append(Line(chunk, sorted(links, key=lambda l: l.start), colors))
+            lines.extend(split_look_hint(Line(chunk, sorted(links, key=lambda l: l.start), colors)))
             offset = end + 1
         complete = text.endswith("\n")
         if complete:

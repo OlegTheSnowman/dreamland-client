@@ -95,6 +95,14 @@ class ColourExitsTest(unittest.TestCase):
         self.assertEqual([(l.text[a:b], c) for l in lines for a, b, c in l.colors], [("red", "fgbr"), ("more", "fgbr")])
 
 
+class LookHintTest(unittest.TestCase):
+    def test_hint_split_from_next_line(self):
+        lines, _, _ = OutputParser().parse("You can look at: tapestry, painting. <m i='9' c='get $'>A corpse</m> lies here.
+")
+        self.assertEqual([l.text for l in lines], ["You can look at: tapestry, painting.", "A corpse lies here."])
+        self.assertEqual(lines[1].text[lines[1].links[0].start:lines[1].links[0].end], "A corpse")
+
+
 class UpdaterTest(unittest.TestCase):
     def test_versions(self):
         from dlclient.updater import is_newer, parse_version
