@@ -1352,7 +1352,7 @@ class MainFrame(wx.Frame):
             if i == 0:
                 self.sound.exit_tone(name, i)
             else:
-                wx.CallLater(100 * i, self.sound.exit_tone, name, i)
+                wx.CallLater(130 * i, self.sound.exit_tone, name, i)
 
     def toggle_tones(self):
         self.prefs["exit_tones"] = not self.prefs.get("exit_tones", True)
