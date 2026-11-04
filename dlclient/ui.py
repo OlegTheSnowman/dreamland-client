@@ -216,6 +216,7 @@ class MainFrame(wx.Frame):
         game = wx.Menu()
         self._item(game, tr("menu.connect"), lambda e: self.connect())
         self._item(game, tr("menu.disconnect"), lambda e: self.disconnect())
+        self._item(game, tr("menu.resumerun"), lambda e: self.resume_run())
         self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
         self._item(game, tr("menu.server"), lambda e: self.choose_server())
         self._item(game, tr("menu.account"), lambda e: self.open_account())
@@ -578,6 +579,7 @@ class MainFrame(wx.Frame):
             else:
                 self.answer_lang_menu()
         lines, complete, msp = self.parser.parse(text)
+        self.note_run_left(lines)
         for kind, name, opts in msp:
             self.sound.handle(kind, name, opts)
         if self.prompt_due and not complete and lines and self.prefs.get("hide_prompt", True):
@@ -1607,6 +1609,27 @@ class MainFrame(wx.Frame):
                 menu = [(l.label or l.command, l.command) for l in line.links if l.command]
                 return {"label": text, "kind": "custom", "menu": menu, "keys": {}, "refresh": set()}
         return None
+
+    RUN_LEFT = ("You still have left to run:", "Тобі залишалося бігти:", "Тебе оставалось бежать:")
+
+    def note_run_left(self, lines):
+        """Remember the rest of a run the game stopped, so it can be resumed."""
+        for line in lines:
+            if line.text.strip().startswith(self.RUN_LEFT):
+                cmd = next((l.command for l in line.links if (l.command or "").startswith("run ")), None)
+                if not cmd:
+                    rest = line.text.split(":", 1)[1].strip()
+                    cmd = "run " + rest if rest else None
+                if cmd:
+                    self.run_left = cmd
+                    wx.CallAfter(self.say, self.tr("run.stopped"))
+
+    def resume_run(self):
+        cmd = getattr(self, "run_left", None)
+        if not cmd:
+            return self.say(self.tr("run.none"))
+        self.run_left = None
+        self.send_command(cmd)
 
     def walk_path(self, command):
         """Ask the game for the route to a room and run it, closing the list."""

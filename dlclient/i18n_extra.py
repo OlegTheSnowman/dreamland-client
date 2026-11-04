@@ -1,5 +1,8 @@
 EXTRA = {
     "en": {
+        'menu.resumerun': 'Continue the &run\tCtrl+Shift+R',
+        'run.stopped': 'Run stopped. Ctrl+Shift+R continues it.',
+        'run.none': 'No stopped run to continue.',
         'state.quitting': 'Quitting the game. If it refuses, press Ctrl+D again to drop the connection.',
         'al2.chars': 'Saved characters',
         'al2.add': '&Add or update',
@@ -327,6 +330,9 @@ EXTRA = {
         ),
     },
     "ua": {
+        'menu.resumerun': 'Продовжити &біг\tCtrl+Shift+R',
+        'run.stopped': 'Біг перервано. Ctrl+Shift+R продовжує його.',
+        'run.none': 'Немає перерваного бігу.',
         'state.quitting': 'Виходжу з гри. Якщо гра не дає вийти, натисни Ctrl+D ще раз, щоб розірвати зʼєднання.',
         'al2.chars': 'Збережені персонажі',
         'al2.add': '&Додати або оновити',
@@ -654,6 +660,9 @@ EXTRA = {
         ),
     },
     "ru": {
+        'menu.resumerun': 'Продолжить &бег\tCtrl+Shift+R',
+        'run.stopped': 'Бег прерван. Ctrl+Shift+R продолжает его.',
+        'run.none': 'Нет прерванного бега.',
         'state.quitting': 'Выхожу из игры. Если игра не дает выйти, нажми Ctrl+D еще раз, чтобы разорвать соединение.',
         'al2.chars': 'Сохраненные персонажи',
         'al2.add': '&Добавить или обновить',
