@@ -126,6 +126,7 @@ class MainFrame(wx.Frame):
         self.walk_until = 0
         self.walk_name = ""
         self.walk_then = None
+        self.tone_room = None
         self.help_search = HelpSearch(prefs_mod.folder())
         self.autobuff_dlg = None
         self.account_wait = None
@@ -273,6 +274,10 @@ class MainFrame(wx.Frame):
         self._item(opts, tr("menu.speechfilter"), lambda e: self.open_speech_filter())
         self._item(opts, tr("menu.stopspeech"), lambda e: self.speech.silence())
         opts.AppendSeparator()
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.tones"))
+        it.Check(bool(self.prefs.get("exit_tones", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_tones(), it)
+        self.tones_item = it
         it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.log"))
         it.Check(bool(self.prefs.get("log_session")))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_log(), it)
@@ -417,6 +422,7 @@ class MainFrame(wx.Frame):
                 self.sound.stop_all()
         elif command == "prompt" and args and isinstance(args[0], dict):
             self.prompt.update(args[0])
+            self.play_exit_tones()
             self.prompt_due = True
             self.update_status()
             if self.nanny_password:
@@ -1326,6 +1332,32 @@ class MainFrame(wx.Frame):
         else:
             hidden = (char.get("profile") or {}).get("hidden")
             self.send_command("account profile %s %s" % ("show" if hidden else "hide", name))
+
+    TONE_ORDER = (("n", "north"), ("e", "east"), ("s", "south"), ("w", "west"), ("u", "up"), ("d", "down"))
+
+    def play_exit_tones(self):
+        room = self.prompt.get("vnum")
+        if room is None or room == self.tone_room:
+            return
+        first = self.tone_room is None
+        self.tone_room = room
+        if first or not self.prefs.get("exit_tones", True):
+            return
+        exits = self.prompt.get("exits")
+        if not isinstance(exits, dict):
+            return
+        visible = str(exits.get("e") or "").lower()
+        dirs = [name for letter, name in self.TONE_ORDER if letter in visible]
+        for i, name in enumerate(dirs):
+            if i == 0:
+                self.sound.exit_tone(name, i)
+            else:
+                wx.CallLater(100 * i, self.sound.exit_tone, name, i)
+
+    def toggle_tones(self):
+        self.prefs["exit_tones"] = not self.prefs.get("exit_tones", True)
+        self.tones_item.Check(self.prefs["exit_tones"])
+        self.say(self.tr("tones.on" if self.prefs["exit_tones"] else "tones.off"))
 
     def read_panel(self, key):
         fn = dict(status_mod.PANELS)[key]

@@ -40,7 +40,7 @@ class SoundPlayer:
         if pygame:
             try:
                 pygame.mixer.init()
-                pygame.mixer.set_num_channels(8)
+                pygame.mixer.set_num_channels(12)
                 self.effect_channel = pygame.mixer.Channel(0)
                 self.music_channel = pygame.mixer.Channel(1)
                 self.preview_channel = pygame.mixer.Channel(2)
@@ -166,6 +166,23 @@ class SoundPlayer:
         if entry:
             self.preview_channel.set_volume(self.gain(entry.get("type", "ui"), 100) or 0.0)
             self.preview_channel.play(self._sound(entry))
+
+    def exit_tone(self, direction, index):
+        if not self.ok or self.prefs.get("mute"):
+            return
+        key = "exits/" + direction
+        if key not in self.cache:
+            path = os.path.join(self.folder, "exits", direction + ".wav")
+            try:
+                self.cache[key] = pygame.mixer.Sound(path)
+            except Exception:
+                self.cache[key] = None
+        snd = self.cache.get(key)
+        if not snd:
+            return
+        channel = pygame.mixer.Channel(4 + index % 6)
+        channel.set_volume(self.gain("ui", 70))
+        channel.play(snd)
 
     def try_sound(self, name, kind):
         if not self.ok:

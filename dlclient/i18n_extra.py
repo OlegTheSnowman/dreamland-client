@@ -1,5 +1,9 @@
 EXTRA = {
     "en": {
+        'menu.tones': 'Exit &tones when you move',
+        'tones.on': "Exit tones on: each move plays the room's exits, north high, south low, east and west in each ear, up and down as slides.",
+        'tones.off': 'Exit tones off.',
+        'keys.tones': "\nExit tones: when you move, the room's exits play as short plucks. North is high, south is low, east and west sound in the right and left ear, up slides upward and down slides downward. Turn them off in Options.",
         'dir.north': 'north',
         'dir.south': 'south',
         'dir.east': 'east',
@@ -221,6 +225,10 @@ EXTRA = {
         ),
     },
     "ua": {
+        'menu.tones': '&Тони виходів під час руху',
+        'tones.on': 'Тони виходів увімкнено: кожен крок грає виходи кімнати, північ високо, південь низько, схід і захід у кожному вусі, вгору і вниз ковзанням.',
+        'tones.off': 'Тони виходів вимкнено.',
+        'keys.tones': '\nТони виходів: коли ти рухаєшся, виходи кімнати звучать короткими щипками. Північ висока, південь низька, схід і захід звучать у правому і лівому вусі, вгору ковзає вгору, вниз ковзає вниз. Вимикаються в Налаштуваннях.',
         'dir.north': 'північ',
         'dir.south': 'південь',
         'dir.east': 'схід',
@@ -442,6 +450,10 @@ EXTRA = {
         ),
     },
     "ru": {
+        'menu.tones': '&Тоны выходов при движении',
+        'tones.on': 'Тоны выходов включены: каждый шаг играет выходы комнаты, север высоко, юг низко, восток и запад в каждом ухе, вверх и вниз скольжением.',
+        'tones.off': 'Тоны выходов выключены.',
+        'keys.tones': '\nТоны выходов: когда ты двигаешься, выходы комнаты звучат короткими щипками. Север высокий, юг низкий, восток и запад звучат в правом и левом ухе, вверх скользит вверх, вниз скользит вниз. Выключаются в Настройках.',
         'dir.north': 'север',
         'dir.south': 'юг',
         'dir.east': 'восток',

@@ -19,6 +19,7 @@ DEFAULTS = {
     "speech_skip": [],
     "log_session": False,
     "check_updates": True,
+    "exit_tones": True,
     "history": [],
     "vars": {},
 }
