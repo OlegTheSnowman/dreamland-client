@@ -133,6 +133,7 @@ class MainFrame(wx.Frame):
         self.room_lines = []
         self.room_wait = None
         self.room_timer = None
+        self.capture = None
         self.help_search = HelpSearch(prefs_mod.folder())
         self.autobuff_dlg = None
         self.account_wait = None
@@ -194,6 +195,10 @@ class MainFrame(wx.Frame):
         ident = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, lambda e: self.fight_menu(), id=ident)
         accel.append((wx.ACCEL_ALT, ord("8"), ident))
+        for letter, kind in (("I", "inventory"), ("E", "equipment")):
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, k=kind: self.open_items(k), id=ident)
+            accel.append((wx.ACCEL_ALT, ord(letter), ident))
         for flags, key, fn in ((wx.ACCEL_CTRL, ord("="), lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, wx.WXK_NUMPAD_ADD, lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, ord("-"), lambda: self.change_font(-1)),
@@ -225,6 +230,8 @@ class MainFrame(wx.Frame):
             self._item(panels, tr("menu.panel." + key).split("\t")[0], lambda e, k=key: self.read_panel(k))
         self._item(panels, tr("menu.panel.fight").split("\t")[0], lambda e: self.fight_menu())
         game.AppendSubMenu(panels, tr("menu.panels"))
+        self._item(game, tr("menu.inventory"), lambda e: self.open_items("inventory"))
+        self._item(game, tr("menu.equipment"), lambda e: self.open_items("equipment"))
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
         self._item(game, tr("menu.findnext"), lambda e: self.find_step(-1))
@@ -519,6 +526,10 @@ class MainFrame(wx.Frame):
             lines[-1].text, lines[-1].links = "", []
         self.prompt_due = False
         starts = self.append_lines(lines, complete)
+        if self.capture is not None:
+            self.capture["lines"].extend(lines)
+            if not complete:
+                self.finish_capture()
         if self.room_wait is not None:
             self.room_lines.extend(lines)
             if not complete:
@@ -1417,6 +1428,41 @@ class MainFrame(wx.Frame):
             self.say(self.tr("server.set", self.conn.url))
         dlg.Destroy()
         self.input.SetFocus()
+
+    def open_items(self, kind):
+        if not self.conn.in_world:
+            return self.say(self.tr("rooms.nowhere"))
+        if self.capture and self.capture.get("timer"):
+            self.capture["timer"].Stop()
+        self.capture = {"kind": kind, "lines": [], "timer": wx.CallLater(3000, self.finish_capture)}
+        self.send_command(kind)
+
+    def finish_capture(self):
+        cap, self.capture = self.capture, None
+        if not cap:
+            return
+        if cap.get("timer"):
+            cap["timer"].Stop()
+        rows = []
+        compare = self.tr("items.compare")
+        for line in cap["lines"]:
+            for link in line.links:
+                if not link.menu:
+                    continue
+                entries = list(link.menu)
+                ident = getattr(link, "ident", "")
+                if cap["kind"] == "inventory" and ident.isdigit():
+                    entries = entries + [None, (compare, "compare " + ident)]
+                rows.append((" ".join(line.text.split()), entries))
+                break
+        title = self.tr("items.inventory" if cap["kind"] == "inventory" else "items.equipment")
+        dlg = dialogs.ItemsDialog(self, self.tr, title, rows)
+        dlg.ShowModal()
+        cmd = dlg.choice
+        dlg.Destroy()
+        self.input.SetFocus()
+        if cmd:
+            self.send_command(cmd)
 
     def read_panel(self, key):
         fn = dict(status_mod.PANELS)[key]

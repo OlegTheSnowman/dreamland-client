@@ -1430,3 +1430,53 @@ class UpdateDialog(wx.Dialog):
         self.SetEscapeId(wx.ID_NO)
         self.notes.SetFocus()
         self.notes.SetInsertionPoint(0)
+
+
+class ItemsDialog(wx.Dialog):
+    def __init__(self, parent, tr, title, rows):
+        super().__init__(parent, title=title, size=wx.Size(620, 480),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.rows = tr, rows
+        self.choice = None
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.list = labelled(self, s, title, wx.ListBox(self, choices=[r[0] for r in rows] or [tr("items.none")]),
+                             expand="grow")
+        if rows:
+            self.list.SetSelection(0)
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        actions = wx.Button(self, wx.ID_OK, tr("items.actions"))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        actions.SetDefault()
+        row.Add(actions, 0, wx.ALL, 4)
+        row.Add(close, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        self.SetSizer(s)
+        actions.Bind(wx.EVT_BUTTON, lambda e: self.menu())
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.menu())
+        self.list.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        self.list.SetFocus()
+
+    def on_key(self, event):
+        if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            return self.menu()
+        event.Skip()
+
+    def menu(self):
+        i = self.list.GetSelection()
+        if not (0 <= i < len(self.rows)):
+            return
+        label, entries = self.rows[i]
+        menu = wx.Menu()
+        for entry in entries:
+            if entry is None:
+                menu.AppendSeparator()
+                continue
+            text, cmd = entry
+            it = menu.Append(wx.ID_ANY, text)
+            self.Bind(wx.EVT_MENU, lambda e, c=cmd: self.pick(c), it)
+        self.PopupMenu(menu)
+        menu.Destroy()
+
+    def pick(self, cmd):
+        self.choice = cmd
+        self.EndModal(wx.ID_OK)
