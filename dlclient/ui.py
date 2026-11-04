@@ -1164,17 +1164,20 @@ class MainFrame(wx.Frame):
         route = area["route"]
         if not route:
             return self.say(area.get("note") or self.tr("areas.noroute"))
+        then = (" " + self.tr("areas.then", area["note"])) if area.get("note") else ""
         if how == dlg.ROUTE:
             self.input.ChangeValue("run " + route)
             self.input.SetInsertionPointEnd()
-            return self.say(self.tr("areas.route", route))
+            return self.say(self.tr("areas.route", route) + then)
         if area_key(self.prompt.get("area")) != MIDGAARD:
             self.input.ChangeValue("run " + route)
             self.input.SetInsertionPointEnd()
-            return self.say(self.tr("areas.typed", route))
+            return self.say(self.tr("areas.typed", route) + then)
         if str(self.prompt.get("vnum")) == str(MARKET_SQUARE):
+            if then:
+                self.say(then.strip())
             return self.send_command("run " + route)
-        self.say(self.tr("areas.walking", area["name"]))
+        self.say(self.tr("areas.walking", area["name"]) + then)
         lang = self.tr.lang
 
         def find_square():

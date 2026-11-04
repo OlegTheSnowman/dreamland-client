@@ -1,5 +1,6 @@
 EXTRA = {
     "en": {
+        'areas.then': 'After the route: %s.',
         'upd.head': 'Version %s of the DreamLand client is out. You have %s. Install it now? The client will restart.',
         'upd.notes': "What's new",
         'upd.yes': '&Yes, update now',
@@ -154,6 +155,7 @@ EXTRA = {
         ),
     },
     "ua": {
+        'areas.then': 'Після шляху: %s.',
         'upd.head': 'Вийшла версія %s клієнта DreamLand. У тебе %s. Установити зараз? Клієнт перезапуститься.',
         'upd.notes': 'Що нового',
         'upd.yes': '&Так, оновити',
@@ -308,6 +310,7 @@ EXTRA = {
         ),
     },
     "ru": {
+        'areas.then': 'После пути: %s.',
         'upd.head': 'Вышла версия %s клиента DreamLand. У тебя %s. Установить сейчас? Клиент перезапустится.',
         'upd.notes': 'Что нового',
         'upd.yes': '&Да, обновить',

@@ -41,6 +41,19 @@ MIDGAARD = "midgaard"
 DANGER = ("safe", "easy", "hard", "deadly")
 
 
+ROUTE_HEAD = re.compile(r"^([0-9neswudNESWUD]+)(?:$|\s*[,;]|\s+(?:or|или|або)\b)", re.I)
+
+
+def split_route(text):
+    text = (text or "").strip()
+    if ROUTE.fullmatch(text):
+        return text, ""
+    m = ROUTE_HEAD.match(text)
+    if m:
+        return m.group(1), text[m.end(1):].strip(" ,;")
+    return None, text
+
+
 def route_steps(route):
     total = 0
     for count, letter in re.findall(r"(\d*)([neswudNESWUD])", route or ""):
@@ -77,6 +90,9 @@ def fetch_areas(lang, timeout=15):
         clean = lambda v: COLOUR.sub("", str(v or "")).strip()
         en, ru = clean(e.get("nameEn")), clean(e.get("name"))
         sw = clean(e.get("speedwalk"))
+        route, _ = split_route(sw)
+        local = clean(e.get("speedwalk" + suffix)) or sw
+        note = split_route(local)[1] if route else local
         out.append({
             "file": area_key(e["file"]),
             "name": clean(e.get("name" + suffix)) or en or ru,
@@ -85,9 +101,9 @@ def fetch_areas(lang, timeout=15):
             "min": int(e.get("levelLow") or 0),
             "max": int(e.get("levelHigh") or 0),
             "levels": bool(e.get("levelHigh")),
-            "route": sw if ROUTE.fullmatch(sw) else None,
-            "steps": route_steps(sw) if ROUTE.fullmatch(sw) else None,
-            "note": clean(e.get("speedwalk" + suffix)) or sw,
+            "route": route,
+            "steps": route_steps(route) if route else None,
+            "note": note,
             "danger": next((d for d in DANGER if d in flags), ""),
         })
     out.sort(key=lambda a: a["name"].lower())
