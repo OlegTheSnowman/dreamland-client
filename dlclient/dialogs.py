@@ -1097,9 +1097,14 @@ class AreasDialog(wx.Dialog):
 
     def fill(self):
         q = self.search.GetValue().strip().lower()
-        if q.isdigit():
-            n = int(q)
-            self.shown = [a for a in self.areas if a["levels"] and a["min"] <= n <= a["max"]]
+        nums = q.replace("-", " ").split()
+        if nums and all(x.isdigit() for x in nums) and len(nums) <= 2:
+            # One number: zones that start at that level. Two: zones that start at
+            # the first or above and end at the second or below.
+            low = int(nums[0])
+            high = int(nums[1]) if len(nums) == 2 else None
+            self.shown = [a for a in self.areas if a["levels"] and a["min"] >= low
+                          and (a["min"] == low if high is None else a["max"] <= high)]
         elif q:
             self.shown = [a for a in self.areas if q in a["name"].lower() or q in a["en"].lower()
                           or q in a["ru"].lower()]
