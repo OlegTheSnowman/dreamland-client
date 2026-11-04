@@ -239,7 +239,7 @@ for _lang, _strings in TOOLS.items():
     STRINGS[_lang].update(_strings)
 for _lang, _strings in EXTRA.items():
     STRINGS[_lang].update(_strings)
-    STRINGS[_lang]["keys.text"] += _strings["keys.extra"] + _strings["keys.areas"] + _strings["keys.help"] + _strings["keys.four"] + _strings["keys.status"] + _strings["keys.tones"] + _strings["keys.room"] + _strings["keys.items"]
+    STRINGS[_lang]["keys.text"] += _strings["keys.extra"] + _strings["keys.areas"] + _strings["keys.help"] + _strings["keys.four"] + _strings["keys.status"] + _strings["keys.tones"] + _strings["keys.room"] + _strings["keys.items"] + _strings["keys.lists"]
 
 
 class Tr:

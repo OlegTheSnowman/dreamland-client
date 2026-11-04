@@ -1433,19 +1433,30 @@ class UpdateDialog(wx.Dialog):
 
 
 class ItemsDialog(wx.Dialog):
+    KEYS = {
+        "item": {(wx.WXK_DELETE, False): ["drop"], (wx.WXK_DELETE, True): ["drop", "sacrifice"],
+                 (ord("C"), True): ["compare"], (ord("L"), True): ["look"], (ord("W"), True): ["wear"],
+                 (ord("R"), True): ["remove"], (ord("G"), True): ["get"], (ord("N"), True): ["open"]},
+        "mob": {(ord("L"), True): ["look"], (ord("C"), True): ["consider"], (ord("K"), True): ["kill"],
+                (ord("F"), True): ["follow"]},
+        "player": {(ord("L"), True): ["look"], (ord("H"), True): ["whois"], (ord("F"), True): ["follow"],
+                   (ord("T"), True): ["tell"]},
+    }
+
     def __init__(self, parent, tr, title, rows):
-        super().__init__(parent, title=title, size=wx.Size(620, 480),
+        super().__init__(parent, title=title, size=wx.Size(640, 500),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.tr, self.rows = tr, rows
         self.choice = None
         s = wx.BoxSizer(wx.VERTICAL)
-        self.list = labelled(self, s, title, wx.ListBox(self, choices=[r[0] for r in rows] or [tr("items.none")]),
+        s.Add(wx.StaticText(self, label=tr("items.keys")), 0, wx.ALL, 6)
+        self.list = labelled(self, s, title, wx.ListBox(self, choices=[r["label"] for r in rows] or [tr("items.none")]),
                              expand="grow")
         if rows:
             self.list.SetSelection(0)
         row = wx.BoxSizer(wx.HORIZONTAL)
-        actions = wx.Button(self, wx.ID_OK, tr("items.actions"))
-        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        actions = wx.Button(self, wx.ID_OK, tr("items.actions").replace("&", ""))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close").replace("&", ""))
         actions.SetDefault()
         row.Add(actions, 0, wx.ALL, 4)
         row.Add(close, 0, wx.ALL, 4)
@@ -1456,27 +1467,36 @@ class ItemsDialog(wx.Dialog):
         self.list.Bind(wx.EVT_KEY_DOWN, self.on_key)
         self.list.SetFocus()
 
+    def current(self):
+        i = self.list.GetSelection()
+        return self.rows[i] if 0 <= i < len(self.rows) else None
+
     def on_key(self, event):
-        if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+        key = event.GetKeyCode()
+        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) and not event.HasAnyModifiers():
             return self.menu()
+        row = self.current()
+        if row:
+            verbs = self.KEYS.get(row["kind"], {}).get((key, event.AltDown()))
+            if verbs and not event.ControlDown() and not event.ShiftDown():
+                return self.pick(("verbs", verbs, row))
         event.Skip()
 
     def menu(self):
-        i = self.list.GetSelection()
-        if not (0 <= i < len(self.rows)):
+        row = self.current()
+        if not row:
             return
-        label, entries = self.rows[i]
         menu = wx.Menu()
-        for entry in entries:
+        for entry in row["menu"]:
             if entry is None:
                 menu.AppendSeparator()
                 continue
             text, cmd = entry
             it = menu.Append(wx.ID_ANY, text)
-            self.Bind(wx.EVT_MENU, lambda e, c=cmd: self.pick(c), it)
+            self.Bind(wx.EVT_MENU, lambda e, c=cmd: self.pick(("command", c, row)), it)
         self.PopupMenu(menu)
         menu.Destroy()
 
-    def pick(self, cmd):
-        self.choice = cmd
+    def pick(self, choice):
+        self.choice = choice
         self.EndModal(wx.ID_OK)

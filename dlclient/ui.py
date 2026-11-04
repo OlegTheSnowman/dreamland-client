@@ -21,7 +21,7 @@ from .mapview import AreaMap
 from .helpsearch import HelpSearch
 from . import status as status_mod
 from .scripting import new_id
-from .presence import classify
+from .presence import classify, kind_of
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -195,7 +195,7 @@ class MainFrame(wx.Frame):
         ident = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, lambda e: self.fight_menu(), id=ident)
         accel.append((wx.ACCEL_ALT, ord("8"), ident))
-        for letter, kind in (("I", "inventory"), ("E", "equipment")):
+        for letter, kind in (("I", "inventory"), ("E", "equipment"), ("O", "room"), ("P", "who")):
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, k=kind: self.open_items(k), id=ident)
             accel.append((wx.ACCEL_ALT, ord(letter), ident))
@@ -232,6 +232,8 @@ class MainFrame(wx.Frame):
         game.AppendSubMenu(panels, tr("menu.panels"))
         self._item(game, tr("menu.inventory"), lambda e: self.open_items("inventory"))
         self._item(game, tr("menu.equipment"), lambda e: self.open_items("equipment"))
+        self._item(game, tr("menu.roomlist"), lambda e: self.open_items("room"))
+        self._item(game, tr("menu.wholist"), lambda e: self.open_items("who"))
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
         self._item(game, tr("menu.findnext"), lambda e: self.find_step(-1))
@@ -1429,13 +1431,20 @@ class MainFrame(wx.Frame):
         dlg.Destroy()
         self.input.SetFocus()
 
-    def open_items(self, kind):
+    LISTS = {"inventory": ("inventory", "items.inventory"), "equipment": ("equipment", "items.equipment"),
+             "room": ("look", "items.room"), "who": ("who", "items.who")}
+
+    def open_items(self, kind, command=None, title=None, container=None):
         if not self.conn.in_world:
             return self.say(self.tr("rooms.nowhere"))
+        if kind in self.LISTS:
+            command, key = self.LISTS[kind]
+            title = self.tr(key)
         if self.capture and self.capture.get("timer"):
             self.capture["timer"].Stop()
-        self.capture = {"kind": kind, "lines": [], "timer": wx.CallLater(3000, self.finish_capture)}
-        self.send_command(kind)
+        self.capture = {"kind": kind, "title": title, "container": container, "lines": [],
+                        "timer": wx.CallLater(3000, self.finish_capture)}
+        self.send_command(command)
 
     def finish_capture(self):
         cap, self.capture = self.capture, None
@@ -1449,20 +1458,41 @@ class MainFrame(wx.Frame):
             for link in line.links:
                 if not link.menu:
                     continue
+                ident = getattr(link, "ident", "") or ""
+                kind = kind_of(link)
                 entries = list(link.menu)
-                ident = getattr(link, "ident", "")
-                if cap["kind"] == "inventory" and ident.isdigit():
+                if kind == "item" and cap["kind"] == "inventory" and ident.isdigit():
                     entries = entries + [None, (compare, "compare " + ident)]
-                rows.append((" ".join(line.text.split()), entries))
-                break
-        title = self.tr("items.inventory" if cap["kind"] == "inventory" else "items.equipment")
-        dlg = dialogs.ItemsDialog(self, self.tr, title, rows)
+                rows.append({"label": " ".join(line.text.split()), "menu": entries, "ident": ident,
+                             "kind": kind, "name": link.label, "container": cap.get("container")})
+                if cap["kind"] != "who":
+                    break
+        dlg = dialogs.ItemsDialog(self, self.tr, cap["title"], rows)
         dlg.ShowModal()
-        cmd = dlg.choice
+        choice = dlg.choice
         dlg.Destroy()
         self.input.SetFocus()
-        if cmd:
-            self.send_command(cmd)
+        if not choice:
+            return
+        how, what, row = choice
+        if how == "command":
+            return self.send_command(what)
+        self.item_verbs(what, row)
+
+    def item_verbs(self, verbs, row):
+        ident = row["ident"]
+        target = ident if row["kind"] != "player" else row["name"]
+        for verb in verbs:
+            if verb == "open":
+                return self.open_items("container", "look in " + ident, row["label"], container=ident)
+            if verb == "tell":
+                self.input.ChangeValue("tell %s " % target)
+                self.input.SetInsertionPointEnd()
+                return self.say(self.tr("items.tell", target))
+            if verb == "get" and row.get("container"):
+                self.send_command("get %s %s" % (ident, row["container"]))
+                continue
+            self.send_command("%s %s" % (verb, target))
 
     def read_panel(self, key):
         fn = dict(status_mod.PANELS)[key]

@@ -18,3 +18,11 @@ def classify(lines):
             words = {entry[1].split()[0].lower() for entry in link.menu if entry and entry[1].split()}
             found.add("mob" if words & CREATURE_WORDS else "item")
     return found
+
+
+def kind_of(link):
+    ident = getattr(link, "ident", "") or ""
+    if ident and not ident.isdigit():
+        return "player"
+    words = {entry[1].split()[0].lower() for entry in link.menu if entry and entry[1].split()}
+    return "mob" if words & CREATURE_WORDS else "item"
