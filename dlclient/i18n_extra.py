@@ -28,9 +28,6 @@ EXTRA = {
         "log.on": "Logging to %s",
         "log.off": "Logging stopped.",
         "menu.logs": "Open the &logs folder",
-        "menu.exits": "Commas between e&xits",
-        "exits.on": "Exits are separated by commas.",
-        "exits.off": "Exits are separated by spaces, as the game sends them.",
         "menu.appearance": "&Appearance",
         "theme.dark": "&Dark, like the web client",
         "theme.light": "&Light",
@@ -60,7 +57,7 @@ EXTRA = {
             "\nCtrl+F searches the output, Ctrl+G finds the next older match, Ctrl+Shift+G the next newer one.\n"
             "Ctrl+Shift+X stops speech.\n"
             "Ctrl+= and Ctrl+- make the text bigger and smaller. Options, Appearance has the colour themes and the font.\n"
-            "Options also has the sound settings, the speech filter, logging the session to a file and commas between exits."
+            "Options also has the sound settings, the speech filter, and logging the session to a file."
         ),
     },
     "ua": {
@@ -92,9 +89,6 @@ EXTRA = {
         "log.on": "Запис у %s",
         "log.off": "Запис зупинено.",
         "menu.logs": "Відкрити теку &записів",
-        "menu.exits": "Коми між &виходами",
-        "exits.on": "Виходи розділені комами.",
-        "exits.off": "Виходи розділені пробілами, як їх надсилає гра.",
         "menu.appearance": "&Вигляд",
         "theme.dark": "&Темний, як у веб-клієнті",
         "theme.light": "&Світлий",
@@ -124,7 +118,7 @@ EXTRA = {
             "\nCtrl+F шукає у виводі, Ctrl+G знаходить наступний старіший збіг, Ctrl+Shift+G наступний новіший.\n"
             "Ctrl+Shift+X зупиняє мовлення.\n"
             "Ctrl+= і Ctrl+- збільшують і зменшують текст. У Налаштуваннях, Вигляд є теми кольорів і шрифт.\n"
-            "У Налаштуваннях також є звук, фільтр мовлення, запис сесії у файл і коми між виходами."
+            "У Налаштуваннях також є звук, фільтр мовлення і запис сесії у файл."
         ),
     },
     "ru": {
@@ -156,9 +150,6 @@ EXTRA = {
         "log.on": "Запись в %s",
         "log.off": "Запись остановлена.",
         "menu.logs": "Открыть папку &записей",
-        "menu.exits": "Запятые между &выходами",
-        "exits.on": "Выходы разделены запятыми.",
-        "exits.off": "Выходы разделены пробелами, как их присылает игра.",
         "menu.appearance": "&Вид",
         "theme.dark": "&Темный, как в веб-клиенте",
         "theme.light": "&Светлый",
@@ -188,7 +179,7 @@ EXTRA = {
             "\nCtrl+F ищет в выводе, Ctrl+G находит следующее более старое совпадение, Ctrl+Shift+G следующее более новое.\n"
             "Ctrl+Shift+X останавливает речь.\n"
             "Ctrl+= и Ctrl+- увеличивают и уменьшают текст. В Настройках, Вид есть цветовые темы и шрифт.\n"
-            "В Настройках также есть звук, фильтр речи, запись сессии в файл и запятые между выходами."
+            "В Настройках также есть звук, фильтр речи и запись сессии в файл."
         ),
     },
 }

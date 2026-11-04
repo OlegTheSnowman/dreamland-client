@@ -18,7 +18,6 @@ DEFAULTS = {
     "font": {"face": "Consolas", "size": 12},
     "speech_skip": [],
     "log_session": False,
-    "comma_exits": False,
     "check_updates": True,
     "history": [],
     "vars": {},

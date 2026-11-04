@@ -31,8 +31,8 @@ It also has a few things of its own:
 - Search in the output (Ctrl+F, then Ctrl+G for older matches and Ctrl+Shift+G
   for newer ones).
 - Chat buffers per channel, read with Alt and the arrow keys.
-- A speech filter for lines you don't want spoken, logging the session to a
-  text file, and commas between exits.
+- A speech filter for lines you don't want spoken, and logging the session to
+  a text file.
 - Auto login, with the password kept in Windows Credential Manager.
 - Updates from GitHub releases, checked at start.
 

@@ -77,7 +77,6 @@ class MainFrame(wx.Frame):
             self.sound_refreshed = time.time()
             threading.Thread(target=self._update_sounds, args=(live,), daemon=True).start()
         self.parser = OutputParser()
-        self.parser.comma_exits = bool(self.prefs.get("comma_exits"))
         self.find_text = ""
         self.find_row = None
         self.log_file = None
@@ -247,10 +246,6 @@ class MainFrame(wx.Frame):
         self._item(look, tr("font.bigger"), lambda e: self.change_font(1))
         self._item(look, tr("font.smaller"), lambda e: self.change_font(-1))
         opts.AppendSubMenu(look, tr("menu.appearance"))
-        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.exits"))
-        it.Check(bool(self.prefs.get("comma_exits")))
-        self.Bind(wx.EVT_MENU, lambda e: self.toggle_exits(), it)
-        self.exits_item = it
         self._item(opts, tr("menu.speechfilter"), lambda e: self.open_speech_filter())
         self._item(opts, tr("menu.stopspeech"), lambda e: self.speech.silence())
         opts.AppendSeparator()
@@ -1252,12 +1247,6 @@ class MainFrame(wx.Frame):
         f["size"] = max(7, min(40, int(f.get("size", 12)) + step))
         self.apply_theme(recolour=False)
         self.say(self.tr("font.size", f["size"]))
-
-    def toggle_exits(self):
-        self.prefs["comma_exits"] = not self.prefs.get("comma_exits")
-        self.parser.comma_exits = self.prefs["comma_exits"]
-        self.exits_item.Check(self.prefs["comma_exits"])
-        self.say(self.tr("exits.on" if self.prefs["comma_exits"] else "exits.off"))
 
     def open_sound(self):
         dlg = dialogs.SoundDialog(self, self.tr, self.prefs["sound"], self.sound)
