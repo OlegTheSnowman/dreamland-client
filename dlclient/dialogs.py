@@ -1159,3 +1159,249 @@ class HelpSearchDialog(wx.Dialog):
         if 0 <= i < len(self.rows):
             self.choice = self.rows[i]["id"]
             self.EndModal(wx.ID_OK)
+
+
+class EditorDialog(wx.Dialog):
+    def __init__(self, parent, tr, text):
+        super().__init__(parent, title=tr("ed.title"), size=wx.Size(760, 560),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX)
+        s = wx.BoxSizer(wx.VERTICAL)
+        s.Add(wx.StaticText(self, label=tr("ed.intro")), 0, wx.ALL, 6)
+        self.text = labelled(self, s, tr("ed.text"), wx.TextCtrl(self, value=text.replace("\r", ""),
+                                                                 style=wx.TE_MULTILINE | wx.TE_RICH2), expand="grow")
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        save = wx.Button(self, wx.ID_OK, tr("ed.save"))
+        cancel = wx.Button(self, wx.ID_CANCEL, tr("cancel"))
+        row.Add(save, 0, wx.ALL, 4)
+        row.Add(cancel, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL | wx.ALIGN_RIGHT, 2)
+        self.SetSizer(s)
+        ident = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, lambda e: self.EndModal(wx.ID_OK), id=ident)
+        self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord("S"), ident),
+                                                     (wx.ACCEL_CTRL, wx.WXK_RETURN, ident)]))
+        self.text.SetFocus()
+        self.text.SetInsertionPoint(0)
+
+    def value(self):
+        text = self.text.GetValue().replace("\r\n", "\n").replace("\r", "\n")
+        return text if text.endswith("\n") or not text else text + "\n"
+
+
+class ScriptEditDialog(wx.Dialog):
+    def __init__(self, parent, tr, text, source):
+        super().__init__(parent, title=tr("se.title"), size=wx.Size(800, 600),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX)
+        s = wx.BoxSizer(wx.VERTICAL)
+        s.Add(wx.StaticText(self, label=tr("se.intro") + " " + tr("se.source." + (source or "none"))), 0, wx.ALL, 6)
+        self.text = labelled(self, s, tr("se.text"), wx.TextCtrl(self, value=text,
+                                                                 style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.HSCROLL),
+                             expand="grow")
+        self.text.SetFont(wx.Font(wx.FontInfo(11).Family(wx.FONTFAMILY_TELETYPE)))
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        save = wx.Button(self, wx.ID_OK, tr("se.save"))
+        cancel = wx.Button(self, wx.ID_CANCEL, tr("cancel"))
+        row.Add(save, 0, wx.ALL, 4)
+        row.Add(cancel, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL | wx.ALIGN_RIGHT, 2)
+        self.SetSizer(s)
+        ident = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, lambda e: self.EndModal(wx.ID_OK), id=ident)
+        self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord("S"), ident)]))
+        self.text.SetFocus()
+
+    def value(self):
+        return self.text.GetValue().replace("\r\n", "\n")
+
+
+class AccountDialog(wx.Dialog):
+    SWITCH, PROFILE = 301, 302
+
+    def __init__(self, parent, tr, data):
+        super().__init__(parent, title=tr("acc.title"), size=wx.Size(560, 440),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr = tr
+        self.chars = [c for c in data.get("chars") or [] if isinstance(c, dict) and c.get("name")]
+        self.choice = None
+        s = wx.BoxSizer(wx.VERTICAL)
+        head = tr("acc.current", data.get("current") or "")
+        if data.get("title"):
+            head += " " + str(data["title"])
+        s.Add(wx.StaticText(self, label=head), 0, wx.ALL, 6)
+        self.list = labelled(self, s, tr("acc.list"), wx.ListBox(self, choices=[self.label(c) for c in self.chars]
+                                                                or [tr("acc.none")]), expand="grow")
+        if self.chars:
+            self.list.SetSelection(0)
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        switch = wx.Button(self, self.SWITCH, tr("acc.switch"))
+        profile = wx.Button(self, self.PROFILE, tr("acc.profile"))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        switch.SetDefault()
+        for b in (switch, profile, close):
+            row.Add(b, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        self.SetSizer(s)
+        switch.Bind(wx.EVT_BUTTON, lambda e: self.done(self.SWITCH))
+        profile.Bind(wx.EVT_BUTTON, lambda e: self.done(self.PROFILE))
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.done(self.SWITCH))
+        self.list.SetFocus()
+
+    def label(self, c):
+        lang = self.tr.lang
+        parts = [c["name"]]
+        if c.get("level"):
+            parts.append(self.tr("acc.level", c["level"]))
+        cls = c.get("class")
+        if isinstance(cls, dict):
+            cls = cls.get(lang) or cls.get("en") or cls.get("ru")
+        if cls:
+            parts.append(str(cls))
+        prof = c.get("profile") or {}
+        if prof.get("hidden"):
+            parts.append(self.tr("acc.hidden"))
+        return ", ".join(parts)
+
+    def done(self, how):
+        i = self.list.GetSelection()
+        if 0 <= i < len(self.chars):
+            self.choice = (self.chars[i], how)
+            self.EndModal(wx.ID_OK)
+
+
+class AutobuffLineEdit(wx.Dialog):
+    def __init__(self, parent, tr, gate="*", cmd=""):
+        super().__init__(parent, title=tr("ab.line"))
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.gate = labelled(self, s, tr("ab.gate"), wx.TextCtrl(self, value=gate, size=wx.Size(360, -1)))
+        self.gate.SetMaxLength(40)
+        self.cmd = labelled(self, s, tr("ab.cmd"), wx.TextCtrl(self, value=cmd, size=wx.Size(360, -1)))
+        self.cmd.SetMaxLength(200)
+        ok_cancel(self, s, tr)
+        self.SetSizerAndFit(s)
+        self.cmd.SetFocus()
+
+
+class AutobuffDialog(wx.Dialog):
+    MAX_LINES = 20
+
+    def __init__(self, parent, tr, send, say):
+        super().__init__(parent, title=tr("ab.title"), size=wx.Size(640, 600),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.send, self.say = tr, send, say
+        self.spells, self.custom = [], []
+        self.seq = 0
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.info = wx.StaticText(self, label=tr("ab.loading"))
+        s.Add(self.info, 0, wx.ALL, 6)
+        self.list = labelled(self, s, tr("ab.spells"), wx.CheckListBox(self), expand="grow")
+        r1 = wx.BoxSizer(wx.HORIZONTAL)
+        up = wx.Button(self, label=tr("ab.up"))
+        down = wx.Button(self, label=tr("ab.down"))
+        r1.Add(up, 0, wx.ALL, 4)
+        r1.Add(down, 0, wx.ALL, 4)
+        s.Add(r1, 0)
+        self.lines = labelled(self, s, tr("ab.own"), wx.ListBox(self), expand="grow")
+        r2 = wx.BoxSizer(wx.HORIZONTAL)
+        add = wx.Button(self, label=tr("list.add"))
+        edit = wx.Button(self, label=tr("ab.edit"))
+        remove = wx.Button(self, label=tr("ab.remove"))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        for b in (add, edit, remove, close):
+            r2.Add(b, 0, wx.ALL, 4)
+        s.Add(r2, 0)
+        self.SetSizer(s)
+        self.list.Bind(wx.EVT_CHECKLISTBOX, self.on_check)
+        up.Bind(wx.EVT_BUTTON, lambda e: self.move(-1))
+        down.Bind(wx.EVT_BUTTON, lambda e: self.move(1))
+        add.Bind(wx.EVT_BUTTON, lambda e: self.edit_line(None))
+        edit.Bind(wx.EVT_BUTTON, lambda e: self.edit_line(self.lines.GetSelection()))
+        remove.Bind(wx.EVT_BUTTON, lambda e: self.remove_line())
+        self.lines.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.edit_line(self.lines.GetSelection()))
+        self.list.SetFocus()
+        self.request()
+
+    def next_seq(self):
+        self.seq += 1
+        return str(self.seq)
+
+    def request(self):
+        if not self.send("autobuff_prefs", "list", self.next_seq()):
+            self.info.SetLabel(self.tr("cfg.wait"))
+
+    def on_data(self, data):
+        if str(data.get("seq")) != str(self.seq):
+            return
+        self.spells = [dict(x) for x in data.get("spells") or [] if isinstance(x, dict) and x.get("sn")]
+        self.custom = [dict(x) for x in data.get("custom") or [] if isinstance(x, dict)]
+        self.fill()
+        self.info.SetLabel(self.tr("ab.intro") if self.spells or self.custom else self.tr("ab.empty"))
+
+    def fill(self, keep=None, keep_line=None):
+        sel = self.list.GetSelection() if keep is None else keep
+        self.list.Set([x.get("name") or x["sn"] for x in self.spells])
+        for i, x in enumerate(self.spells):
+            self.list.Check(i, bool(x.get("on")))
+        if self.spells:
+            self.list.SetSelection(max(0, min(sel if sel != wx.NOT_FOUND else 0, len(self.spells) - 1)))
+        lsel = self.lines.GetSelection() if keep_line is None else keep_line
+        self.lines.Set([self.line_label(x) for x in self.custom])
+        if self.custom:
+            self.lines.SetSelection(max(0, min(lsel if lsel != wx.NOT_FOUND else 0, len(self.custom) - 1)))
+
+    def line_label(self, x):
+        gate = x.get("gate") or "*"
+        head = self.tr("ab.always") if gate == "*" else self.tr("ab.unless", gate)
+        text = "%s: %s" % (head, x.get("cmd") or "")
+        if x.get("bad"):
+            text += " " + self.tr("ab.bad")
+        return text
+
+    def commit(self):
+        order = ",".join(x["sn"] for x in self.spells)
+        off = ",".join(x["sn"] for x in self.spells if not x.get("on"))
+        clean = lambda v: " ".join(str(v or "").split())
+        own = "\n".join("%s\t%s" % (clean(x.get("gate")) or "*", clean(x.get("cmd"))) for x in self.custom)
+        self.send("autobuff_prefs", "set", order, off, own, self.next_seq())
+
+    def on_check(self, event):
+        i = event.GetInt()
+        if 0 <= i < len(self.spells):
+            self.spells[i]["on"] = 1 if self.list.IsChecked(i) else 0
+            self.commit()
+
+    def move(self, step):
+        i = self.list.GetSelection()
+        j = i + step
+        if i == wx.NOT_FOUND or not (0 <= j < len(self.spells)):
+            return
+        self.spells[i], self.spells[j] = self.spells[j], self.spells[i]
+        self.fill(keep=j)
+        self.list.SetFocus()
+        self.say(self.tr("ab.moved", self.spells[j].get("name") or self.spells[j]["sn"], j + 1))
+        self.commit()
+
+    def edit_line(self, i):
+        new = i is None or i == wx.NOT_FOUND
+        if new and len(self.custom) >= self.MAX_LINES:
+            return self.say(self.tr("list.full"))
+        x = {} if new else self.custom[i]
+        dlg = AutobuffLineEdit(self, self.tr, x.get("gate") or "*", x.get("cmd") or "")
+        if dlg.ShowModal() == wx.ID_OK and dlg.cmd.GetValue().strip():
+            row = {"gate": dlg.gate.GetValue().strip() or "*", "cmd": dlg.cmd.GetValue().strip()}
+            if new:
+                self.custom.append(row)
+                i = len(self.custom) - 1
+            else:
+                self.custom[i] = row
+            self.fill(keep_line=i)
+            self.commit()
+        dlg.Destroy()
+        self.lines.SetFocus()
+
+    def remove_line(self):
+        i = self.lines.GetSelection()
+        if 0 <= i < len(self.custom):
+            del self.custom[i]
+            self.fill(keep_line=i)
+            self.commit()
+            self.lines.SetFocus()

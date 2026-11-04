@@ -1,3 +1,4 @@
+import base64
 import datetime
 import os
 import re
@@ -124,6 +125,8 @@ class MainFrame(wx.Frame):
         self.walk_name = ""
         self.walk_then = None
         self.help_search = HelpSearch(prefs_mod.folder())
+        self.autobuff_dlg = None
+        self.account_wait = None
         self.sound_fetching = set()
         self.completion = None
         self.prompt = {}
@@ -192,6 +195,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.connect"), lambda e: self.connect())
         self._item(game, tr("menu.disconnect"), lambda e: self.conn.disconnect())
         self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
+        self._item(game, tr("menu.account"), lambda e: self.open_account())
         game.AppendSeparator()
         self._item(game, tr("menu.links"), lambda e: self.show_links())
         self._item(game, tr("menu.chat"), lambda e: self.open_chat())
@@ -266,6 +270,8 @@ class MainFrame(wx.Frame):
         self._item(tools, tr("menu.macros"), lambda e: self.open_tool("macros"))
         self._item(tools, tr("menu.aliases"), lambda e: self.open_tool("aliases"))
         self._item(tools, tr("menu.vars"), lambda e: self.open_tool("vars"))
+        self._item(tools, tr("menu.autobuff"), lambda e: self.open_autobuff())
+        self._item(tools, tr("menu.script"), lambda e: self.open_script_editor())
         tools.AppendSeparator()
         self._item(tools, tr("menu.settings"), lambda e: self.open_settings())
         mb.Append(tools, tr("menu.tools"))
@@ -438,6 +444,15 @@ class MainFrame(wx.Frame):
         elif command == "resume_failed" and not self.conn.resume_pending:
             if self.lang_menu_waiting:
                 self.answer_lang_menu()
+        elif command == "editor_open":
+            wx.CallAfter(self.open_editor, str(args[0]) if args else "")
+        elif command == "autobuff_list" and args and isinstance(args[0], dict):
+            if self.autobuff_dlg:
+                self.autobuff_dlg.on_data(args[0])
+        elif command == "script_saved" and args and isinstance(args[0], dict):
+            self.on_script_saved(args[0])
+        elif command == "account_chars" and args and isinstance(args[0], dict):
+            self.on_account_chars(args[0])
         elif command == "alert" and args:
             self.notice(str(args[0]))
 
@@ -1207,6 +1222,82 @@ class MainFrame(wx.Frame):
         self.input.SetFocus()
         if choice is not None:
             self.send_command("help %s" % choice)
+
+    def open_editor(self, text):
+        dlg = dialogs.EditorDialog(self, self.tr, text)
+        if dlg.ShowModal() == wx.ID_OK:
+            if self.conn.rpc("editor_save", dlg.value()):
+                self.say(self.tr("ed.saved"))
+            else:
+                self.notice(self.tr("state.closed"))
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def open_autobuff(self):
+        dlg = dialogs.AutobuffDialog(self, self.tr, self.conn.rpc, lambda t: self.say(t))
+        self.autobuff_dlg = dlg
+        dlg.ShowModal()
+        self.autobuff_dlg = None
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def open_script_editor(self):
+        dlg = dialogs.ScriptEditDialog(self, self.tr, self.script.text or self.script.stock_text(),
+                                       self.script.source)
+        while dlg.ShowModal() == wx.ID_OK:
+            text = dlg.value()
+            raw = text.encode("utf-8")
+            if len(raw) > 65536:
+                wx.MessageBox(self.tr("se.toobig"), self.tr("se.title"), wx.OK | wx.ICON_WARNING, dlg)
+                continue
+            stock = text.strip() == (self.script.stock_text() or "").strip()
+            if not stock and not self.script.load(text, "account"):
+                continue
+            if stock:
+                self.script.load_stock()
+            b64 = "" if stock else base64.b64encode(raw).decode("ascii")
+            if not self.conn.rpc("script_put", b64):
+                self.notice(self.tr("state.closed"))
+            break
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def on_script_saved(self, data):
+        if data.get("ok"):
+            return self.notice(self.tr("se.saved"))
+        reason = str(data.get("reason") or "io")
+        key = "se.reason." + reason
+        text = self.tr(key)
+        self.notice(self.tr("se.fail", reason if text == key else text))
+
+    def open_account(self):
+        if not self.conn.rpc("account_chars"):
+            return self.notice(self.tr("state.closed"))
+        self.say(self.tr("acc.loading"))
+        if self.account_wait:
+            self.account_wait.Stop()
+        self.account_wait = wx.CallLater(2500, lambda: self.say(self.tr("acc.noreply")))
+
+    def on_account_chars(self, data):
+        if not self.account_wait:
+            return
+        self.account_wait.Stop()
+        self.account_wait = None
+        dlg = dialogs.AccountDialog(self, self.tr, data)
+        choice = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
+        dlg.Destroy()
+        self.input.SetFocus()
+        if not choice:
+            return
+        char, how = choice
+        name = str(char.get("name"))
+        if not re.fullmatch(r"[A-Za-z]{1,20}", name):
+            return
+        if how == dialogs.AccountDialog.SWITCH:
+            self.send_command("account switch " + name)
+        else:
+            hidden = (char.get("profile") or {}).get("hidden")
+            self.send_command("account profile %s %s" % ("show" if hidden else "hide", name))
 
     def read_recent(self, n):
         seen = 0
