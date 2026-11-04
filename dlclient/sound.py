@@ -167,6 +167,8 @@ class SoundPlayer:
             self.preview_channel.set_volume(self.gain(entry.get("type", "ui"), 100) or 0.0)
             self.preview_channel.play(self._sound(entry))
 
+    LOUDER = {"room/item": 100}
+
     def exit_tone(self, direction, index, folder="exits"):
         if not self.ok or self.prefs.get("mute"):
             return
@@ -181,7 +183,7 @@ class SoundPlayer:
         if not snd:
             return
         channel = pygame.mixer.Channel(10 + index % 4 if folder == "room" else 4 + index % 6)
-        channel.set_volume(self.gain("ui", 70))
+        channel.set_volume(self.gain("ui", self.LOUDER.get(key, 70)))
         channel.play(snd)
 
     def try_sound(self, name, kind):

@@ -57,13 +57,14 @@ def seq(parts):
 SOUNDS = {
     "player": lambda: seq([(0, wood(700)), (0.1, wood(900))]),
     "mob": lambda: seq([(0, bubble(380, 220, 0.18, 0.7))]),
-    "item": lambda: seq([(0, glass(1900))]),
+    "item": lambda: seq([(0, glass(1900, length=0.12, vol=0.4))]),
     "target": lambda: seq([(i * 0.055, metal(1650)) for i in range(3)]),
 }
 
 for name, fn in SOUNDS.items():
     data = fn()
-    data = data / (np.max(np.abs(data)) or 1) * 0.8
+    peak = 0.98 if name == "item" else 0.8
+    data = data / (np.max(np.abs(data)) or 1) * peak
     with wave.open(os.path.join(OUT, name + ".wav"), "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
