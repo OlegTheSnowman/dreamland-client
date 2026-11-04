@@ -134,6 +134,8 @@ class MainFrame(wx.Frame):
         self.room_wait = None
         self.room_timer = None
         self.capture = None
+        self.items_dlg = None
+        self.items_view = None
         self.help_search = HelpSearch(prefs_mod.folder())
         self.autobuff_dlg = None
         self.account_wait = None
@@ -1446,6 +1448,8 @@ class MainFrame(wx.Frame):
                         "timer": wx.CallLater(3000, self.finish_capture)}
         self.send_command(command)
 
+    REFRESH_VERBS = {"drop", "sacrifice", "wear", "remove", "get", "kill"}
+
     def finish_capture(self):
         cap, self.capture = self.capture, None
         if not cap:
@@ -1467,17 +1471,49 @@ class MainFrame(wx.Frame):
                              "kind": kind, "name": link.label, "container": cap.get("container")})
                 if cap["kind"] != "who":
                     break
-        dlg = dialogs.ItemsDialog(self, self.tr, cap["title"], rows)
+        self.items_view = cap
+        if self.items_dlg:
+            return self.items_dlg.set_rows(cap["title"], rows)
+        dlg = dialogs.ItemsDialog(self, self.tr, cap["title"], rows, self.item_action)
+        self.items_dlg = dlg
         dlg.ShowModal()
-        choice = dlg.choice
+        self.items_dlg = None
         dlg.Destroy()
         self.input.SetFocus()
-        if not choice:
-            return
+
+    def item_action(self, choice):
         how, what, row = choice
         if how == "command":
-            return self.send_command(what)
+            self.send_command(what)
+            return self.refresh_items()
+        if "tell" in what:
+            if self.items_dlg:
+                self.items_dlg.EndModal(wx.ID_OK)
+            target = row["name"]
+            self.input.ChangeValue("tell %s " % target)
+            self.input.SetInsertionPointEnd()
+            return wx.CallAfter(self.say, self.tr("items.tell", target))
         self.item_verbs(what, row)
+        if set(what) & self.REFRESH_VERBS:
+            self.refresh_items()
+
+    def refresh_items(self):
+        view = getattr(self, "items_view", None)
+        if not view or not self.items_dlg:
+            return
+        command = {"inventory": "inventory", "equipment": "equipment", "room": "look", "who": "who"}.get(view["kind"])
+        if view["kind"] == "container":
+            command = "look in " + view["container"]
+        if not command:
+            return
+        wx.CallLater(400, self._recapture, view, command)
+
+    def _recapture(self, view, command):
+        if not self.items_dlg:
+            return
+        self.capture = {"kind": view["kind"], "title": view["title"], "container": view.get("container"),
+                        "lines": [], "timer": wx.CallLater(3000, self.finish_capture)}
+        self.send_command(command)
 
     def item_verbs(self, verbs, row):
         ident = row["ident"]
@@ -1485,10 +1521,6 @@ class MainFrame(wx.Frame):
         for verb in verbs:
             if verb == "open":
                 return self.open_items("container", "look in " + ident, row["label"], container=ident)
-            if verb == "tell":
-                self.input.ChangeValue("tell %s " % target)
-                self.input.SetInsertionPointEnd()
-                return self.say(self.tr("items.tell", target))
             if verb == "get" and row.get("container"):
                 self.send_command("get %s %s" % (ident, row["container"]))
                 continue

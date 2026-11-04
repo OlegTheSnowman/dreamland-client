@@ -1443,10 +1443,10 @@ class ItemsDialog(wx.Dialog):
                    (ord("T"), True): ["tell"]},
     }
 
-    def __init__(self, parent, tr, title, rows):
+    def __init__(self, parent, tr, title, rows, act):
         super().__init__(parent, title=title, size=wx.Size(640, 500),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        self.tr, self.rows = tr, rows
+        self.tr, self.rows, self.act = tr, rows, act
         self.choice = None
         s = wx.BoxSizer(wx.VERTICAL)
         s.Add(wx.StaticText(self, label=tr("items.keys")), 0, wx.ALL, 6)
@@ -1516,4 +1516,13 @@ class ItemsDialog(wx.Dialog):
 
     def pick(self, choice):
         self.choice = choice
-        self.EndModal(wx.ID_OK)
+        self.act(choice)
+
+    def set_rows(self, title, rows):
+        keep = self.list.GetSelection()
+        self.rows = rows
+        self.SetTitle(title)
+        self.list.Set([r["label"] for r in rows] or [self.tr("items.none")])
+        if rows:
+            self.list.SetSelection(max(0, min(keep if keep != wx.NOT_FOUND else 0, len(rows) - 1)))
+        self.list.SetFocus()
