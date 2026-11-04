@@ -406,9 +406,37 @@ class MainFrame(wx.Frame):
         replay = lambda: self.sound.resolve(name) and self.sound.handle(kind, name, opts)
         threading.Thread(target=self._update_sounds, args=(self.sound_live, replay), daemon=True).start()
 
+    def autologin_chars(self):
+        al = self.prefs.get("autologin") or {}
+        chars = list(al.get("chars") or [])
+        if not chars and (al.get("name") or "").strip():
+            chars = [al["name"].strip()]
+        return [c for c in chars if creds.load(c)]
+
+    def pick_login(self):
+        """Choose the character to log in with for this connection, or None."""
+        al = self.prefs.get("autologin") or {}
+        chars = self.autologin_chars() if al.get("enabled") else []
+        if len(chars) <= 1:
+            return chars[0] if chars else None
+        last = al.get("last")
+        if last in chars:
+            chars.remove(last)
+            chars.insert(0, last)
+        dlg = wx.SingleChoiceDialog(self, self.tr("al2.which"), self.tr("al2.title"), chars)
+        name = chars[dlg.GetSelection()] if dlg.ShowModal() == wx.ID_OK else None
+        dlg.Destroy()
+        if name and name != last:
+            al["last"] = name
+            if not os.environ.get("DLCLIENT_QUIET"):
+                prefs_mod.save(self.prefs)
+        return name
+
     def connect(self):
         if self.conn.is_open:
             return
+        self.login_name = self.pick_login()
+        self.login_asked = True
         self.conn.connect()
 
     def _frame_from_thread(self, command, args):
@@ -811,7 +839,10 @@ class MainFrame(wx.Frame):
 
     def auto_login(self, step):
         al = self.prefs.get("autologin") or {}
-        name = (al.get("name") or "").strip()
+        name = getattr(self, "login_name", None)
+        if name is None and not getattr(self, "login_asked", False):
+            chars = self.autologin_chars() if al.get("enabled") else []
+            name = chars[0] if len(chars) == 1 else None
         if not al.get("enabled") or not name or step in self.auto_sent:
             return
         if step == "name":
@@ -825,21 +856,23 @@ class MainFrame(wx.Frame):
                 self.conn.send_line(password)
 
     def open_autologin(self):
-        al = self.prefs.setdefault("autologin", {"enabled": False, "name": ""})
-        dlg = dialogs.AutoLoginDialog(self, self.tr, bool(al.get("enabled")), al.get("name", ""),
-                                      bool(creds.load(al.get("name", ""))))
+        al = self.prefs.setdefault("autologin", {"enabled": False, "chars": []})
+        chars = list(al.get("chars") or ([al["name"]] if al.get("name") else []))
+        dlg = dialogs.AutoLoginDialog(self, self.tr, bool(al.get("enabled")), chars,
+                                      lambda n: bool(creds.load(n)))
         if dlg.ShowModal() == wx.ID_OK:
-            old = al.get("name", "")
-            name = dlg.name.GetValue().strip()
-            if dlg.forgotten or (old and old.lower() != name.lower()):
-                creds.delete(old)
-            if dlg.password.GetValue():
-                creds.save(name, dlg.password.GetValue())
-            al["name"] = name
-            al["enabled"] = dlg.enabled.GetValue() and bool(creds.load(name))
+            for low in dlg.removed:
+                creds.delete(low)
+            for name, password in dlg.passwords.values():
+                creds.save(name, password)
+            al["chars"] = dlg.chars
+            al.pop("name", None)
+            saved = [n for n in dlg.chars if creds.load(n)]
+            al["enabled"] = dlg.enabled.GetValue() and bool(saved)
             if not os.environ.get("DLCLIENT_QUIET"):
                 prefs_mod.save(self.prefs)
-            self.say(self.tr("al2.on", name) if al["enabled"] else self.tr("al2.off"))
+            self.say(self.tr("al2.on", ", ".join(saved)) if al["enabled"] else self.tr("al2.off"))
+        dlg.passwords.clear()
         dlg.password.SetValue("")
         dlg.Destroy()
         self.input.SetFocus()

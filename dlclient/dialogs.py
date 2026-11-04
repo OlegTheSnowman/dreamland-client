@@ -775,36 +775,85 @@ class SettingsDialog(wx.Dialog):
 
 
 class AutoLoginDialog(wx.Dialog):
-    def __init__(self, parent, tr, enabled, name, has_password):
-        super().__init__(parent, title=tr("al2.title"), size=wx.Size(520, 330))
-        self.tr = tr
+    """Saved characters for auto login. Passwords go to the Windows Credential
+    Manager when OK is pressed; this dialog only collects the changes."""
+
+    def __init__(self, parent, tr, enabled, chars, has_password):
+        super().__init__(parent, title=tr("al2.title"), size=wx.Size(560, 460))
+        self.tr, self.has_password = tr, has_password
+        self.chars = list(chars)
+        self.passwords = {}
+        self.removed = set()
         s = wx.BoxSizer(wx.VERTICAL)
         self.enabled = wx.CheckBox(self, label=tr("al2.enabled"))
         self.enabled.SetValue(enabled)
         s.Add(self.enabled, 0, wx.ALL, 6)
-        self.name = labelled(self, s, tr("al2.name"), wx.TextCtrl(self, value=name or ""))
-        self.password = labelled(self, s, tr("al2.saved") if has_password else tr("al2.password"),
-                                 wx.TextCtrl(self, style=wx.TE_PASSWORD))
-        self.forget = wx.Button(self, label=tr("al2.forget"))
-        self.forget.Bind(wx.EVT_BUTTON, self.on_forget)
-        s.Add(self.forget, 0, wx.ALL, 6)
+        self.list = labelled(self, s, tr("al2.chars"), wx.ListBox(self), expand="grow")
+        self.name = labelled(self, s, tr("al2.name"), wx.TextCtrl(self))
+        self.password = labelled(self, s, tr("al2.password"), wx.TextCtrl(self, style=wx.TE_PASSWORD))
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        add = wx.Button(self, label=tr("al2.add"))
+        remove = wx.Button(self, label=tr("al2.remove"))
+        row.Add(add, 0, wx.ALL, 4)
+        row.Add(remove, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        add.Bind(wx.EVT_BUTTON, self.on_add)
+        remove.Bind(wx.EVT_BUTTON, self.on_remove)
+        self.list.Bind(wx.EVT_LISTBOX, self.on_pick)
         ok = ok_cancel(self, s, tr)
         ok.Bind(wx.EVT_BUTTON, self.on_ok)
         self.SetSizer(s)
-        self.forgotten = False
+        self.fill()
         self.enabled.SetFocus()
 
-    def on_forget(self, event):
-        self.forgotten = True
-        self.enabled.SetValue(False)
+    def saved(self, name):
+        if name.lower() in self.passwords:
+            return True
+        return name.lower() not in self.removed and self.has_password(name)
+
+    def fill(self, keep=None):
+        rows = [self.tr("al2.row", n) if self.saved(n) else self.tr("al2.rownopass", n) for n in self.chars]
+        self.list.Set(rows or [self.tr("al2.none")])
+        if self.chars:
+            self.list.SetSelection(self.chars.index(keep) if keep in self.chars else 0)
+
+    def on_pick(self, event):
+        i = self.list.GetSelection()
+        if 0 <= i < len(self.chars):
+            self.name.SetValue(self.chars[i])
+            self.password.SetValue("")
+
+    def on_add(self, event):
+        name = self.name.GetValue().strip()
+        if not name:
+            message(self, self.tr("al2.needname"), self.tr("al2.title"))
+            return self.name.SetFocus()
+        name = name[:1].upper() + name[1:]
+        existing = next((n for n in self.chars if n.lower() == name.lower()), None)
+        if existing is None:
+            self.chars.append(name)
+            existing = name
+        if self.password.GetValue():
+            self.passwords[existing.lower()] = (existing, self.password.GetValue())
+            self.removed.discard(existing.lower())
         self.password.SetValue("")
-        message(self, self.tr("al2.forgotten"), self.tr("al2.title"))
+        self.fill(existing)
+        self.list.SetFocus()
+
+    def on_remove(self, event):
+        i = self.list.GetSelection()
+        if not 0 <= i < len(self.chars):
+            return
+        name = self.chars.pop(i)
+        self.passwords.pop(name.lower(), None)
+        self.removed.add(name.lower())
+        self.fill()
+        self.list.SetFocus()
 
     def on_ok(self, event):
-        if self.enabled.GetValue() and not self.name.GetValue().strip():
-            message(self, self.tr("al2.needname"), self.tr("al2.title"))
-            self.name.SetFocus()
-            return
+        if self.enabled.GetValue() and not any(self.saved(n) for n in self.chars):
+            message(self, self.tr("al2.needchar"), self.tr("al2.title"))
+            return self.name.SetFocus()
         self.EndModal(wx.ID_OK)
 
 
