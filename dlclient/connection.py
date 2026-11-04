@@ -45,6 +45,11 @@ class Connection:
             except Exception:
                 pass
 
+    def ended(self):
+        """The game said goodbye after quit: let the socket close for good."""
+        self.wanted = False
+        self.resume_token = None
+
     def send_line(self, text):
         return self.rpc("console_in", text + "\n")
 

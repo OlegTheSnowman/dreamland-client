@@ -215,7 +215,7 @@ class MainFrame(wx.Frame):
 
         game = wx.Menu()
         self._item(game, tr("menu.connect"), lambda e: self.connect())
-        self._item(game, tr("menu.disconnect"), lambda e: self.conn.disconnect())
+        self._item(game, tr("menu.disconnect"), lambda e: self.disconnect())
         self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
         self._item(game, tr("menu.server"), lambda e: self.choose_server())
         self._item(game, tr("menu.account"), lambda e: self.open_account())
@@ -548,8 +548,25 @@ class MainFrame(wx.Frame):
         self.lang_menu_waiting = False
         self.conn.send_line(GAME_MENU_CHOICE.get(self.tr.lang, "1"))
 
+    QUIT_LINES = ("Too bad, but all good things come to an end eventually.",
+                  "Шкода, але все хороше колись закінчується.",
+                  "Жаль, но все хорошее когда-нибудь заканчивается.")
+
+    def disconnect(self):
+        """Quit the character first, so it does not stay in the world link-dead.
+        If the game refuses (a fight, for example), a second press cuts the line."""
+        if not self.conn.in_world or getattr(self, "quit_sent", 0) > time.time() - 10:
+            self.quit_sent = 0
+            return self.conn.disconnect()
+        self.quit_sent = time.time()
+        self.send_command("quit", echo=False)
+        self.say(self.tr("state.quitting"))
+
     def on_console(self, raw):
         text = self.telnet.process(raw)
+        if text and any(line in text for line in self.QUIT_LINES):
+            self.quit_sent = 0
+            self.conn.ended()
         self.set_password_mode(self.telnet.echo_off or self.nanny_password)
         if self.telnet.echo_off:
             self.auto_login("password")
