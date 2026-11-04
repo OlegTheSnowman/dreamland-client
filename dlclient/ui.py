@@ -131,6 +131,8 @@ class MainFrame(wx.Frame):
         self.walk_then = None
         self.tone_room = None
         self.room_lines = []
+        self.room_wait = None
+        self.room_timer = None
         self.help_search = HelpSearch(prefs_mod.folder())
         self.autobuff_dlg = None
         self.account_wait = None
@@ -517,8 +519,10 @@ class MainFrame(wx.Frame):
             lines[-1].text, lines[-1].links = "", []
         self.prompt_due = False
         starts = self.append_lines(lines, complete)
-        self.room_lines.extend(lines)
-        del self.room_lines[:-200]
+        if self.room_wait is not None:
+            self.room_lines.extend(lines)
+            if not complete:
+                self.finish_room()
         self.run_triggers(lines, starts)
         if self.walk_until and time.time() < self.walk_until:
             head = "'%s'" % self.walk_name
@@ -1353,7 +1357,6 @@ class MainFrame(wx.Frame):
 
     def play_exit_tones(self):
         room = self.prompt.get("vnum")
-        seen, self.room_lines = self.room_lines, []
         if room is None or room == self.tone_room:
             return
         first = self.tone_room is None
@@ -1370,16 +1373,31 @@ class MainFrame(wx.Frame):
                 self.sound.exit_tone(name, i)
             else:
                 wx.CallLater(130 * i, self.sound.exit_tone, name, i)
+        self.room_lines = []
+        self.room_wait = (time.time() + (130 * len(dirs) + (120 if dirs else 0)) / 1000.0, len(dirs))
+        if self.room_timer:
+            self.room_timer.Stop()
+        self.room_timer = wx.CallLater(800, self.finish_room)
+
+    def finish_room(self):
+        if self.room_wait is None:
+            return
+        due, first = self.room_wait
+        self.room_wait = None
+        if self.room_timer:
+            self.room_timer.Stop()
+            self.room_timer = None
+        seen, self.room_lines = self.room_lines, []
         wanted = self.prefs.get("room_sounds") or {}
         present = classify(seen)
         kinds = [k for k in self.ROOM_SOUND_ORDER if k in present and wanted.get(k, True)]
-        at = 130 * len(dirs) + (120 if dirs else 0)
+        at = max(0, int((due - time.time()) * 1000))
         for j, kind in enumerate(kinds):
             delay = at + 160 * j
-            if delay:
-                wx.CallLater(delay, self.sound.exit_tone, kind, len(dirs) + j, "room")
+            if delay > 0:
+                wx.CallLater(delay, self.sound.exit_tone, kind, first + j, "room")
             else:
-                self.sound.exit_tone(kind, j, "room")
+                self.sound.exit_tone(kind, first + j, "room")
 
     def toggle_room_sound(self, kind, on):
         self.prefs.setdefault("room_sounds", {})[kind] = on
