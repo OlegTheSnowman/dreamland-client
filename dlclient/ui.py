@@ -1544,8 +1544,7 @@ class MainFrame(wx.Frame):
             if not quiet:
                 self.notice(self.tr("upd.none", VERSION))
             return
-        dlg = wx.MessageDialog(self, self.tr("upd.ask", info["tag"].lstrip("v"), VERSION, info["notes"].strip()),
-                               self.tr("upd.title"), wx.YES_NO | wx.YES_DEFAULT | wx.ICON_INFORMATION)
+        dlg = dialogs.UpdateDialog(self, self.tr, info["tag"].lstrip("v"), VERSION, info["notes"].strip())
         yes = dlg.ShowModal() == wx.ID_YES
         dlg.Destroy()
         self.input.SetFocus()

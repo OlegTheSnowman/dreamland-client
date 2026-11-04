@@ -1405,3 +1405,28 @@ class AutobuffDialog(wx.Dialog):
             self.fill(keep_line=i)
             self.commit()
             self.lines.SetFocus()
+
+
+class UpdateDialog(wx.Dialog):
+    def __init__(self, parent, tr, new, old, notes):
+        super().__init__(parent, title=tr("upd.title"), size=wx.Size(620, 480),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        s = wx.BoxSizer(wx.VERTICAL)
+        head = wx.StaticText(self, label=tr("upd.head", new, old))
+        s.Add(head, 0, wx.ALL, 8)
+        self.notes = labelled(self, s, tr("upd.notes"), wx.TextCtrl(
+            self, value=notes.replace("\r\n", "\n").replace("\n", "\r\n"),
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2), expand="grow")
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        yes = wx.Button(self, wx.ID_YES, tr("upd.yes"))
+        no = wx.Button(self, wx.ID_NO, tr("upd.no"))
+        yes.SetDefault()
+        row.Add(yes, 0, wx.ALL, 4)
+        row.Add(no, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 4)
+        self.SetSizer(s)
+        yes.Bind(wx.EVT_BUTTON, lambda e: self.EndModal(wx.ID_YES))
+        no.Bind(wx.EVT_BUTTON, lambda e: self.EndModal(wx.ID_NO))
+        self.SetEscapeId(wx.ID_NO)
+        self.notes.SetFocus()
+        self.notes.SetInsertionPoint(0)
