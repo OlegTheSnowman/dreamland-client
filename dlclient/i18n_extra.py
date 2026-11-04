@@ -1,5 +1,7 @@
 EXTRA = {
     "en": {
+        'menu.clearoutput': '&Clear output',
+        'output.cleared': 'Output cleared.',
         'tl.get': 'Get',
         'tl.filter': 'Filter',
         'tl.look': 'Look',
@@ -316,6 +318,8 @@ EXTRA = {
         ),
     },
     "ua": {
+        'menu.clearoutput': '&Очистити вивід',
+        'output.cleared': 'Вивід очищено.',
         'tl.get': 'Взяти',
         'tl.filter': 'Фільтр',
         'tl.look': 'Подивитися',
@@ -632,6 +636,8 @@ EXTRA = {
         ),
     },
     "ru": {
+        'menu.clearoutput': '&Очистить вывод',
+        'output.cleared': 'Вывод очищен.',
         'tl.get': 'Взять',
         'tl.filter': 'Фильтр',
         'tl.look': 'Посмотреть',

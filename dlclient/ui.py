@@ -321,6 +321,7 @@ class MainFrame(wx.Frame):
         self._item(tools, tr("menu.vars"), lambda e: self.open_tool("vars"))
         self._item(tools, tr("menu.autobuff"), lambda e: self.open_autobuff())
         self._item(tools, tr("menu.script"), lambda e: self.open_script_editor())
+        self._item(tools, tr("menu.clearoutput"), lambda e: self.clear_output())
         tools.AppendSeparator()
         self._item(tools, tr("menu.settings"), lambda e: self.open_settings())
         mb.Append(tools, tr("menu.tools"))
@@ -547,7 +548,7 @@ class MainFrame(wx.Frame):
                 self.conn.send_line("")
                 return
             if not complete:
-                if self.capture["kind"] == "__text__" and self.capture["lines"]:
+                if self.capture["kind"] in ("__text__", "__path__") and self.capture["lines"]:
                     self.capture["lines"].pop()
                 self.finish_capture()
             return
@@ -577,6 +578,11 @@ class MainFrame(wx.Frame):
             spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">"
                                and not any(w in l.text.lower() for w in skip))
             self.speech.say(spoken)
+
+    def clear_output(self):
+        self.output.Clear()
+        self.lines = [["", []]]
+        self.say(self.tr("output.cleared"))
 
     def append_lines(self, lines, complete):
         if not lines and not complete:
@@ -1540,6 +1546,14 @@ class MainFrame(wx.Frame):
             return True
         return len(words) > 1 and words[1] in ("read", "look", "info", "show")
 
+    def walk_path(self, command):
+        """Ask the game for the route to a room and run it, closing the list."""
+        if self.capture and self.capture.get("timer"):
+            self.capture["timer"].Stop()
+        self.capture = {"kind": "__path__", "title": command, "lines": [], "command": command,
+                        "timer": wx.CallLater(3000, self.finish_capture)}
+        self.send_command(command, echo=False)
+
     def show_help(self, command, title=None):
         if self.capture and self.capture.get("timer"):
             self.capture["timer"].Stop()
@@ -1556,6 +1570,14 @@ class MainFrame(wx.Frame):
             return
         if cap.get("timer"):
             cap["timer"].Stop()
+        if cap["kind"] == "__path__":
+            route = next((link.command for line in cap["lines"] for link in line.links
+                          if (link.command or "").startswith("run ")), None)
+            if route:
+                if self.items_dlg:
+                    self.items_dlg.EndModal(wx.ID_OK)
+                return wx.CallAfter(self.send_command, route)
+            cap["kind"] = "__text__"
         if cap["kind"] == "__text__":
             text = "\n".join(line.text.rstrip() for line in cap["lines"]).strip()
             dlg = TextDialog(self.items_dlg or self, cap["title"], text or self.tr("items.none"), self.tr("ok"))
@@ -1625,6 +1647,8 @@ class MainFrame(wx.Frame):
                 self.input.SetInsertionPointEnd()
                 hint = "tl.typetarget" if cmds[0].startswith("__target__ ") else "tl.typemessage"
                 return wx.CallAfter(self.say, self.tr(hint))
+            if len(cmds) == 1 and cmds[0].lower().startswith("path ") and self.items_dlg:
+                return self.walk_path(cmds[0])
             if len(cmds) == 1 and self.is_info(cmds[0]) and self.items_dlg:
                 return self.show_help(cmds[0], row.get("label"))
             if row.get("close") and self.items_dlg:
