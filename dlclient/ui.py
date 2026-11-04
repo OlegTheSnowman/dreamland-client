@@ -1523,8 +1523,7 @@ class MainFrame(wx.Frame):
                     self.append_lines([], True)
                 self.append_lines(shown, True)
                 if self.prefs.get("speech"):
-                    self.speech.say("
-".join(l.text for l in shown))
+                    self.speech.say("\n".join(l.text for l in shown))
             else:
                 self.say(self.tr("items.none"))
             return
