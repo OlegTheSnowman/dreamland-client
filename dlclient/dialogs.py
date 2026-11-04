@@ -1026,9 +1026,10 @@ class AreasDialog(wx.Dialog):
         self.search.SetFocus()
 
     def label(self, a):
-        if a["levels"] and a["max"]:
-            return self.tr("areas.row", a["name"], a["min"], a["max"])
-        return a["name"]
+        text = self.tr("areas.row", a["name"], a["min"], a["max"]) if a["levels"] and a["max"] else a["name"]
+        if a.get("danger"):
+            text += ", " + self.tr("areas.danger." + a["danger"])
+        return text
 
     def fill(self):
         q = self.search.GetValue().strip().lower()

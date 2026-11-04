@@ -15,7 +15,9 @@ from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
 from . import creds
-from .areamap import MARKET_SQUARE, MIDGAARD, NoMap, area_key, fetch_areas, fetch_rooms
+from .areamap import MARKET_SQUARE, MIDGAARD, NoMap, area_key, fetch_areas, fetch_graph, fetch_rooms
+from .mapview import AreaMap
+from .mapdialog import MapDialog
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -194,6 +196,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.chat"), lambda e: self.open_chat())
         self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
         self._item(game, tr("menu.areas"), lambda e: self.open_areas())
+        self._item(game, tr("menu.map"), lambda e: self.open_map())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
@@ -1137,7 +1140,7 @@ class MainFrame(wx.Frame):
             return self.send_command("help " + (area["en"] or area["ru"]))
         route = area["route"]
         if not route:
-            return self.say(self.tr("areas.noroute"))
+            return self.say(area.get("note") or self.tr("areas.noroute"))
         if how == dlg.ROUTE:
             self.input.ChangeValue("run " + route)
             self.input.SetInsertionPointEnd()
@@ -1168,6 +1171,55 @@ class MainFrame(wx.Frame):
         self.walk_then = then
         self.walk_until = time.time() + 5
         self.send_command("path %d" % MARKET_SQUARE)
+
+    def open_map(self):
+        area = self.prompt.get("area")
+        if not area:
+            return self.say(self.tr("rooms.nowhere"))
+        self.say(self.tr("map.loading"))
+        lang = self.tr.lang
+
+        def load():
+            names = {}
+            try:
+                graph = fetch_graph(area)
+            except NoMap:
+                graph = None
+            except Exception:
+                graph = False
+            if graph:
+                try:
+                    names = {a["file"]: a["name"] for a in fetch_areas(lang)}
+                except Exception:
+                    names = {}
+            wx.CallAfter(self._map_loaded, graph, names)
+        threading.Thread(target=load, daemon=True).start()
+
+    def _map_loaded(self, graph, names):
+        if graph is None:
+            return self.say(self.tr("rooms.nomap"))
+        if graph is False:
+            return self.say(self.tr("rooms.offline"))
+        amap = AreaMap(graph, self.tr.lang, names)
+        if not amap.rooms:
+            return self.say(self.tr("rooms.nomap"))
+        try:
+            here = int(self.prompt.get("vnum"))
+        except (TypeError, ValueError):
+            here = None
+        dlg = MapDialog(self, self.tr, amap, here, self.say)
+        dlg.ShowModal()
+        target = dlg.choice
+        dlg.Destroy()
+        self.input.SetFocus()
+        if target is None:
+            return
+        if target == here:
+            return self.say(self.tr("map.already"))
+        self.walk_name = amap.rooms[target]["name"]
+        self.walk_then = None
+        self.walk_until = time.time() + 5
+        self.send_command("path %d" % target)
 
     def read_recent(self, n):
         seen = 0
