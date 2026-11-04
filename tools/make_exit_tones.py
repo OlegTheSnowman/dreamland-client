@@ -51,7 +51,7 @@ def room_reverb(x, mix=0.15):
 
 EXITS = {
     "north": lambda: pluck(988),
-    "south": lambda: pluck(587),
+    "south": lambda: pluck(494),
     "east": lambda: pluck(784, pan=0.8),
     "west": lambda: pluck(784, pan=-0.8),
     "up": lambda: pluck(659, glide_to=988),
