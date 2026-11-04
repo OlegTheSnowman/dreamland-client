@@ -88,6 +88,32 @@ class ParserTest(unittest.TestCase):
         self.assertEqual([l.text for l in lines], ["", "hello"])
 
 
+class ColourExitsTest(unittest.TestCase):
+    def test_colour_spans_per_line(self):
+        p = OutputParser()
+        lines, _, _ = p.parse("hi <c c='fgbr'>red\nmore</c> x\n")
+        self.assertEqual([(l.text[a:b], c) for l in lines for a, b, c in l.colors], [("red", "fgbr"), ("more", "fgbr")])
+
+    def test_comma_exits_keep_links(self):
+        p = OutputParser()
+        p.comma_exits = True
+        lines, _, _ = p.parse("[<hc>Exits</hc>: <hc>north</hc> *<hc>east</hc>* <hc>south</hc> | <hc>ladder</hc>]\n")
+        line = lines[0]
+        self.assertEqual(line.text, "[Exits: north, *east*, south | ladder]")
+        self.assertEqual([line.text[l.start:l.end] for l in line.links], ["Exits", "north", "east", "south", "ladder"])
+        lines, _, _ = p.parse("[Exits: north]\n")
+        self.assertEqual(lines[0].text, "[Exits: north]")
+
+
+class UpdaterTest(unittest.TestCase):
+    def test_versions(self):
+        from dlclient.updater import is_newer, parse_version
+        self.assertEqual(parse_version("v1.2"), (1, 2, 0))
+        self.assertTrue(is_newer("v1.0.1", "1.0.0"))
+        self.assertFalse(is_newer("v1.0.0", "1.0.0"))
+        self.assertFalse(is_newer("0.9.9", "1.0.0"))
+
+
 class TelnetTest(unittest.TestCase):
     def test_echo_and_literal_iac(self):
         t = Telnet()

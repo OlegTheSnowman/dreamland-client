@@ -36,6 +36,31 @@ class Link:
 class Line:
     text: str
     links: list
+    colors: list = field(default_factory=list)
+
+
+EXITS_RE = re.compile(r"^(\s*\[[^\]:]{1,20}:)( [^\]|]*?)( \|[^\]]*)?\](\s*)$")
+
+
+def comma_exits(line):
+    m = EXITS_RE.match(line.text)
+    if not m:
+        return line
+    words = m.group(2)
+    base = m.start(2) + 1
+    gaps = [base + i for i, ch in enumerate(words[1:]) if ch == " "]
+    if not gaps:
+        return line
+
+    def move(pos):
+        return pos + sum(1 for g in gaps if g < pos)
+
+    text = line.text
+    for g in reversed(gaps):
+        text = text[:g] + "," + text[g:]
+    links = [Link(move(l.start), move(l.end), l.label, l.command, l.url, l.menu, l.confirm) for l in line.links]
+    colors = [(move(a), move(b), c) for a, b, c in line.colors]
+    return Line(text, links, colors)
 
 
 def _attr_escape(s):
@@ -80,8 +105,13 @@ class _Parser(HTMLParser):
         self.pos = 0
         self.links = []
         self.stack = []
+        self.colors = []
+        self.color_stack = []
 
     def handle_starttag(self, tag, attrs):
+        if tag == "c":
+            self.color_stack.append((dict(attrs).get("c") or "", self.pos))
+            return
         if tag in self.LINK_TAGS:
             self.stack.append((tag, dict(attrs), self.pos, []))
 
@@ -89,6 +119,12 @@ class _Parser(HTMLParser):
         pass
 
     def handle_endtag(self, tag):
+        if tag == "c":
+            if self.color_stack:
+                cls, start = self.color_stack.pop()
+                if cls and self.pos > start:
+                    self.colors.append((start, self.pos, cls))
+            return
         if tag not in self.LINK_TAGS:
             return
         for i in range(len(self.stack) - 1, -1, -1):
@@ -154,6 +190,7 @@ class OutputParser:
     def __init__(self):
         self.nonce = None
         self.msp_enabled = False
+        self.comma_exits = False
 
     def parse(self, raw):
         raw = ANSI_RE.sub("", raw).replace("\r", "")
@@ -174,6 +211,11 @@ class OutputParser:
         while p.stack:
             t, attrs, start, parts = p.stack.pop()
             p._finish(t, attrs, start, "".join(parts))
+        while p.color_stack:
+            cls, start = p.color_stack.pop()
+            if cls and p.pos > start:
+                p.colors.append((start, p.pos, cls))
+        p.colors.sort(key=lambda c: -(c[1] - c[0]))
         text = "".join(p.text).replace("\xa0", " ")
 
         lines = []
@@ -182,7 +224,12 @@ class OutputParser:
             end = offset + len(chunk)
             links = [Link(l.start - offset, l.end - offset, l.label, l.command, l.url, l.menu, l.confirm)
                      for l in p.links if l.start >= offset and l.end <= end]
-            lines.append(Line(chunk, sorted(links, key=lambda l: l.start)))
+            colors = [(max(a, offset) - offset, min(b, end) - offset, c)
+                      for a, b, c in p.colors if a < end and b > offset]
+            line = Line(chunk, sorted(links, key=lambda l: l.start), colors)
+            if self.comma_exits:
+                line = comma_exits(line)
+            lines.append(line)
             offset = end + 1
         complete = text.endswith("\n")
         if complete:
