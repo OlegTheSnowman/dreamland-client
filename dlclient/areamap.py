@@ -41,7 +41,19 @@ MIDGAARD = "midgaard"
 DANGER = ("safe", "easy", "hard", "deadly")
 
 
-ROUTE_HEAD = re.compile(r"^([0-9neswudNESWUD]+)(?:$|\s*[,;]|\s+(?:or|или|або)\b)", re.I)
+ROUTE_HEAD = re.compile(r"^([0-9neswudNESWUD]+)(?:$|\s*[,;]|\s+(?:or|and|или|або|и|і|та|й)\b)", re.I)
+
+
+PARTS = re.compile(r"(?:^|,\s*)([^,:]{1,30}?):\s*([0-9neswudNESWUD]+)(?=\s*(?:,|$))")
+
+
+def split_parts(text):
+    text = text or ""
+    found = list(PARTS.finditer(text))
+    if len(found) < 2:
+        return []
+    tail = text[found[-1].end():].strip(" ,;")
+    return [(m.group(1).strip(), m.group(2), tail if m is found[-1] else "") for m in found]
 
 
 def split_route(text):
@@ -93,6 +105,25 @@ def fetch_areas(lang, timeout=15):
         route, _ = split_route(sw)
         local = clean(e.get("speedwalk" + suffix)) or sw
         note = split_route(local)[1] if route else local
+        parts = split_parts(sw)
+        if parts:
+            local_parts = split_parts(clean(e.get("speedwalk" + suffix)))
+            base = clean(e.get("name" + suffix)) or en or ru
+            for i, (label, part_route, _) in enumerate(parts):
+                shown = local_parts[i][0] if i < len(local_parts) else label
+                out.append({
+                    "file": area_key(e["file"]),
+                    "name": "%s, %s" % (base, shown),
+                    "en": en, "ru": ru,
+                    "min": int(e.get("levelLow") or 0),
+                    "max": int(e.get("levelHigh") or 0),
+                    "levels": bool(e.get("levelHigh")),
+                    "route": part_route,
+                    "steps": route_steps(part_route),
+                    "note": local_parts[i][2] if i < len(local_parts) else parts[i][2],
+                    "danger": next((d for d in DANGER if d in flags), ""),
+                })
+            continue
         out.append({
             "file": area_key(e["file"]),
             "name": clean(e.get("name" + suffix)) or en or ru,
