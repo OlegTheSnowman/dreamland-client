@@ -1530,6 +1530,8 @@ class MainFrame(wx.Frame):
         how, what, row = choice
         if row.get("kind") == "custom":
             cmds = what if how == "commands" else [what]
+            if row.get("close") and self.items_dlg:
+                self.items_dlg.EndModal(wx.ID_OK)
             for cmd in cmds:
                 self.send_command(cmd)
             if any(cmd in row.get("refresh", set()) for cmd in cmds):

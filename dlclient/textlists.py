@@ -114,7 +114,8 @@ def quest_request(lines, tr):
         if m:
             cmd = "quest request " + m.group(1)
             rows.append({"label": "%s, %s" % (m.group(2).strip(), m.group(3).strip()), "kind": "custom",
-                         "menu": [(tr("tl.request"), cmd)], "keys": {(ord("B"), True): [cmd]}, "refresh": set()})
+                         "menu": [(tr("tl.request"), cmd)], "keys": {(ord("B"), True): [cmd]}, "refresh": set(),
+                         "close": True})
     return rows
 
 
