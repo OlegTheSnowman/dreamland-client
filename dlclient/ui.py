@@ -17,6 +17,7 @@ from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expan
 from . import creds
 from .areamap import MARKET_SQUARE, MIDGAARD, NoMap, area_key, fetch_areas, fetch_graph, fetch_rooms
 from .mapview import AreaMap
+from .helpsearch import HelpSearch
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -122,6 +123,7 @@ class MainFrame(wx.Frame):
         self.walk_until = 0
         self.walk_name = ""
         self.walk_then = None
+        self.help_search = HelpSearch(prefs_mod.folder())
         self.sound_fetching = set()
         self.completion = None
         self.prompt = {}
@@ -270,6 +272,7 @@ class MainFrame(wx.Frame):
 
         hlp = wx.Menu()
         self._item(hlp, tr("menu.keys"), lambda e: self.show_text(tr("keys.title"), tr("keys.text")))
+        self._item(hlp, tr("menu.helpsearch"), lambda e: self.open_help_search())
         self._item(hlp, tr("menu.credits"), lambda e: self.show_credits())
         hlp.AppendSeparator()
         self._item(hlp, tr("menu.updates"), lambda e: self.check_updates(quiet=False))
@@ -1176,6 +1179,34 @@ class MainFrame(wx.Frame):
         self.walk_then = then
         self.walk_until = time.time() + 5
         self.send_command("path %d" % MARKET_SQUARE)
+
+    def open_help_search(self):
+        lang = self.tr.lang
+        if self.help_search.ctx is None or lang not in self.help_search.loaded:
+            self.say(self.tr("hs.loading"))
+
+            def load():
+                try:
+                    self.help_search.prepare(lang)
+                    ok = True
+                except Exception:
+                    ok = False
+                wx.CallAfter(self._help_ready, ok)
+            threading.Thread(target=load, daemon=True).start()
+            return
+        self._help_ready(True)
+
+    def _help_ready(self, ok):
+        if not ok:
+            return self.say(self.tr("hs.offline"))
+        dlg = dialogs.HelpSearchDialog(self, self.tr, self.help_search, self.tr.lang,
+                                       lambda t, interrupt=True: self.say(t, interrupt))
+        dlg.ShowModal()
+        choice = dlg.choice
+        dlg.Destroy()
+        self.input.SetFocus()
+        if choice is not None:
+            self.send_command("help %s" % choice)
 
     def read_recent(self, n):
         seen = 0

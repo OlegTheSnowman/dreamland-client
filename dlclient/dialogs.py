@@ -1080,3 +1080,82 @@ class AreasDialog(wx.Dialog):
         if 0 <= i < len(self.shown):
             self.choice = (self.shown[i], how)
             self.EndModal(wx.ID_OK)
+
+
+class HelpSearchDialog(wx.Dialog):
+    def __init__(self, parent, tr, searcher, lang, say):
+        super().__init__(parent, title=tr("hs.title"), size=wx.Size(720, 560),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.searcher, self.lang, self.say = tr, searcher, lang, say
+        self.rows = []
+        self.choice = None
+        self.timer = None
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.search = labelled(self, s, tr("hs.search"), wx.TextCtrl(self))
+        self.status = wx.StaticText(self, label=tr("hs.type"))
+        s.Add(self.status, 0, wx.LEFT | wx.RIGHT, 6)
+        self.list = labelled(self, s, tr("hs.results"), wx.ListBox(self), expand="grow")
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        read = wx.Button(self, wx.ID_OK, tr("hs.read"))
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        read.SetDefault()
+        row.Add(read, 0, wx.ALL, 4)
+        row.Add(close, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        self.SetSizer(s)
+        self.search.Bind(wx.EVT_TEXT, self.on_text)
+        self.search.Bind(wx.EVT_KEY_DOWN, self.on_search_key)
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.done())
+        read.Bind(wx.EVT_BUTTON, lambda e: self.done())
+        self.search.SetFocus()
+
+    def on_text(self, event):
+        if self.timer:
+            self.timer.Stop()
+        self.timer = wx.CallLater(250, self.run)
+
+    def run(self):
+        query = self.search.GetValue().strip()
+        if not query:
+            self.rows = []
+            self.list.Set([])
+            self.status.SetLabel(self.tr("hs.type"))
+            return
+        try:
+            found, suggested = self.searcher.search(query, self.lang)
+        except Exception:
+            self.status.SetLabel(self.tr("hs.offline"))
+            return self.say(self.tr("hs.offline"))
+        self.rows = found
+        labels = []
+        for r in found:
+            text = r["title"] + (", " + r["kind"] if r["kind"] else "")
+            if r["extra"]:
+                text += ". " + r["extra"]
+            labels.append(text)
+        self.list.Set(labels)
+        if found:
+            self.list.SetSelection(0)
+            note = self.tr("hs.suggest", len(found)) if suggested else self.tr("hs.count", len(found))
+        else:
+            note = self.tr("hs.none")
+        self.status.SetLabel(note)
+        self.say(note, False)
+
+    def on_search_key(self, event):
+        key = event.GetKeyCode()
+        if key == wx.WXK_DOWN and self.rows:
+            self.list.SetFocus()
+            return
+        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            if self.timer and self.timer.IsRunning():
+                self.timer.Stop()
+                self.run()
+            return self.done()
+        event.Skip()
+
+    def done(self):
+        i = self.list.GetSelection()
+        if 0 <= i < len(self.rows):
+            self.choice = self.rows[i]["id"]
+            self.EndModal(wx.ID_OK)
