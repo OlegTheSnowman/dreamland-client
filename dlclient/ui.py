@@ -15,7 +15,7 @@ from .access import NamedAccessible
 from .markup import Line, OutputParser
 from .scripting import Aliases, Macros, Triggers, VAR_NAME, canonical_key, expand_vars
 from . import creds
-from .areamap import NoMap, fetch_rooms
+from .areamap import MARKET_SQUARE, MIDGAARD, NoMap, area_key, fetch_areas, fetch_rooms
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -120,6 +120,7 @@ class MainFrame(wx.Frame):
         self.hint_pos = None
         self.walk_until = 0
         self.walk_name = ""
+        self.walk_then = None
         self.sound_fetching = set()
         self.completion = None
         self.prompt = {}
@@ -192,6 +193,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.links"), lambda e: self.show_links())
         self._item(game, tr("menu.chat"), lambda e: self.open_chat())
         self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
+        self._item(game, tr("menu.areas"), lambda e: self.open_areas())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
@@ -466,6 +468,9 @@ class MainFrame(wx.Frame):
                 if line.text.strip().startswith(head) and line.links:
                     self.walk_until = 0
                     self.send_command("|".join(l.command for l in line.links if l.command))
+                    if self.walk_then:
+                        self.send_command(self.walk_then)
+                        self.walk_then = None
                     break
         if self.prefs.get("speech"):
             skip = [w.lower() for w in self.prefs.get("speech_skip") or []]
@@ -1099,10 +1104,69 @@ class MainFrame(wx.Frame):
         dlg = dialogs.RoomsDialog(self, self.tr, rooms)
         if dlg.ShowModal() == wx.ID_OK and dlg.choice:
             vnum, how, self.walk_name = dlg.choice
+            self.walk_then = None
             self.walk_until = time.time() + 5 if how == dlg.WALK else 0
             self.send_command("path %d" % vnum)
         dlg.Destroy()
         self.input.SetFocus()
+
+    def open_areas(self):
+        self.say(self.tr("areas.loading"))
+        lang = self.tr.lang
+
+        def load():
+            try:
+                areas = fetch_areas(lang)
+            except Exception:
+                areas = None
+            wx.CallAfter(self._areas_loaded, areas)
+        threading.Thread(target=load, daemon=True).start()
+
+    def _areas_loaded(self, areas):
+        if not areas:
+            return self.say(self.tr("areas.offline"))
+        dlg = dialogs.AreasDialog(self, self.tr, areas)
+        choice = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
+        dlg.Destroy()
+        self.input.SetFocus()
+        if not choice:
+            return
+        area, how = choice
+        if how == dlg.HELP:
+            return self.send_command("help " + (area["en"] or area["ru"]))
+        route = area["route"]
+        if not route:
+            return self.say(self.tr("areas.noroute"))
+        if how == dlg.ROUTE:
+            self.input.ChangeValue("run " + route)
+            self.input.SetInsertionPointEnd()
+            return self.say(self.tr("areas.route", route))
+        if area_key(self.prompt.get("area")) != MIDGAARD:
+            self.input.ChangeValue("run " + route)
+            self.input.SetInsertionPointEnd()
+            return self.say(self.tr("areas.typed", route))
+        if str(self.prompt.get("vnum")) == str(MARKET_SQUARE):
+            return self.send_command("run " + route)
+        self.say(self.tr("areas.walking", area["name"]))
+        lang = self.tr.lang
+
+        def find_square():
+            try:
+                name = dict(fetch_rooms(MIDGAARD, lang)).get(MARKET_SQUARE)
+            except Exception:
+                name = None
+            wx.CallAfter(self._walk_via_square, name, "run " + route)
+        threading.Thread(target=find_square, daemon=True).start()
+
+    def _walk_via_square(self, name, then):
+        if not name:
+            self.input.ChangeValue(then)
+            self.input.SetInsertionPointEnd()
+            return self.say(self.tr("areas.typed", then[4:]))
+        self.walk_name = name
+        self.walk_then = then
+        self.walk_until = time.time() + 5
+        self.send_command("path %d" % MARKET_SQUARE)
 
     def read_recent(self, n):
         seen = 0

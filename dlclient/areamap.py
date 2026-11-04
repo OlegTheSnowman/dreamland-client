@@ -42,3 +42,34 @@ def fetch_rooms(area_file, lang, timeout=15):
             out.append((int(room["vnum"]), name))
     out.sort(key=lambda r: (r[1].lower(), r[0]))
     return out
+
+
+INDEX_URL = "https://dreamland.rocks/maps/index.json"
+ROUTE = re.compile(r"[0-9neswudNESWUD]+")
+MARKET_SQUARE = 3014
+MIDGAARD = "midgaard"
+
+
+def fetch_areas(lang, timeout=15):
+    req = urllib.request.Request(INDEX_URL, headers={"User-Agent": "DreamLand desktop client"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        data = json.loads(r.read(5_000_000).decode("utf-8"))
+    out = []
+    for e in data if isinstance(data, list) else []:
+        if not isinstance(e, dict) or not e.get("file"):
+            continue
+        en = COLOUR.sub("", str(e.get("credits") or "")).strip()
+        ru = COLOUR.sub("", str(e.get("name") or "")).strip()
+        sw = str(e.get("sw") or "").strip()
+        out.append({
+            "file": area_key(e["file"]),
+            "name": (en if lang == "en" else ru) or en or ru,
+            "en": en,
+            "ru": ru,
+            "min": int(e.get("levMin") or 0),
+            "max": int(e.get("levMax") or 0),
+            "levels": bool(e.get("showLevels", True)),
+            "route": sw if ROUTE.fullmatch(sw) else None,
+        })
+    out.sort(key=lambda a: a["name"].lower())
+    return out

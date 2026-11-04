@@ -990,3 +990,63 @@ class FindDialog(wx.Dialog):
         self.SetSizerAndFit(s)
         self.text.SelectAll()
         self.text.SetFocus()
+
+
+class AreasDialog(wx.Dialog):
+    WALK, ROUTE, HELP = 201, 202, 203
+
+    def __init__(self, parent, tr, areas):
+        super().__init__(parent, title=tr("areas.title"), size=wx.Size(640, 540),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.areas, self.shown = tr, areas, list(areas)
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.search = labelled(self, s, tr("areas.search"), wx.TextCtrl(self))
+        self.list = labelled(self, s, tr("areas.list"), wx.ListBox(self), expand="grow")
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        buttons = [wx.Button(self, self.WALK, tr("rooms.walk")), wx.Button(self, self.ROUTE, tr("rooms.route")),
+                   wx.Button(self, self.HELP, tr("areas.help")), wx.Button(self, wx.ID_CANCEL, tr("list.close"))]
+        buttons[0].SetDefault()
+        for b in buttons:
+            row.Add(b, 0, wx.ALL, 4)
+        s.Add(row, 0, wx.ALL, 2)
+        self.SetSizer(s)
+        self.choice = None
+        self.search.Bind(wx.EVT_TEXT, lambda e: self.fill())
+        self.search.Bind(wx.EVT_KEY_DOWN, self.on_search_key)
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.done(self.WALK))
+        for b in buttons[:3]:
+            b.Bind(wx.EVT_BUTTON, lambda e, i=b.GetId(): self.done(i))
+        self.fill()
+        self.search.SetFocus()
+
+    def label(self, a):
+        if a["levels"] and a["max"]:
+            return self.tr("areas.row", a["name"], a["min"], a["max"])
+        return a["name"]
+
+    def fill(self):
+        q = self.search.GetValue().strip().lower()
+        if q.isdigit():
+            n = int(q)
+            self.shown = [a for a in self.areas if a["levels"] and a["min"] <= n <= a["max"]]
+        elif q:
+            self.shown = [a for a in self.areas if q in a["name"].lower() or q in a["en"].lower()
+                          or q in a["ru"].lower()]
+        else:
+            self.shown = list(self.areas)
+        self.list.Set([self.label(a) for a in self.shown] or [self.tr("rooms.none")])
+        self.list.SetSelection(0)
+
+    def on_search_key(self, event):
+        if event.GetKeyCode() == wx.WXK_DOWN and self.shown:
+            self.list.SetFocus()
+            return
+        if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            return self.done(self.WALK)
+        event.Skip()
+
+    def done(self, how):
+        i = self.list.GetSelection()
+        if 0 <= i < len(self.shown):
+            self.choice = (self.shown[i], how)
+            self.EndModal(wx.ID_OK)
