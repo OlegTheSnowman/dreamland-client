@@ -22,6 +22,7 @@ from .helpsearch import HelpSearch
 from . import status as status_mod
 from .scripting import new_id
 from .presence import classify, kind_of
+from . import textlists
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -198,10 +199,6 @@ class MainFrame(wx.Frame):
         ident = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, lambda e: self.fight_menu(), id=ident)
         accel.append((wx.ACCEL_ALT, ord("8"), ident))
-        for letter, kind in (("I", "inventory"), ("E", "equipment"), ("O", "room"), ("P", "who")):
-            ident = wx.NewIdRef()
-            self.Bind(wx.EVT_MENU, lambda e, k=kind: self.open_items(k), id=ident)
-            accel.append((wx.ACCEL_ALT, ord(letter), ident))
         for flags, key, fn in ((wx.ACCEL_CTRL, ord("="), lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, wx.WXK_NUMPAD_ADD, lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, ord("-"), lambda: self.change_font(-1)),
@@ -237,6 +234,8 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.equipment"), lambda e: self.open_items("equipment"))
         self._item(game, tr("menu.roomlist"), lambda e: self.open_items("room"))
         self._item(game, tr("menu.wholist"), lambda e: self.open_items("who"))
+        for kind in ("shop", "services", "training", "skills"):
+            self._item(game, tr("menu.tl." + kind), lambda e, k=kind: self.open_items(k))
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
         self._item(game, tr("menu.findnext"), lambda e: self.find_step(-1))
@@ -293,6 +292,9 @@ class MainFrame(wx.Frame):
         self._item(opts, tr("menu.speechfilter"), lambda e: self.open_speech_filter())
         self._item(opts, tr("menu.stopspeech"), lambda e: self.speech.silence())
         opts.AppendSeparator()
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.listmenus"))
+        it.Check(bool(self.prefs.get("list_menus", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.prefs.__setitem__("list_menus", e.IsChecked()), it)
         it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.tones"))
         it.Check(bool(self.prefs.get("exit_tones", True)))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_tones(), it)
@@ -530,12 +532,13 @@ class MainFrame(wx.Frame):
         if self.prompt_due and not complete and lines and self.prefs.get("hide_prompt", True):
             lines[-1].text, lines[-1].links = "", []
         self.prompt_due = False
-        starts = self.append_lines(lines, complete)
         if self.capture is not None:
             self.capture["lines"].extend(lines)
             if not complete:
                 self.finish_capture()
-        elif self.refresh_wait and not complete:
+            return
+        starts = self.append_lines(lines, complete)
+        if self.refresh_wait and not complete:
             self.refresh_wait -= 1
             if self.refresh_wait <= 0:
                 self.refresh_wait = 0
@@ -659,6 +662,8 @@ class MainFrame(wx.Frame):
         if text.startswith("#"):
             self.echo(text)
             self.hash_command(text)
+        elif self.typed_list(text):
+            pass
         else:
             self.echo(text)
             if not self.script.on_input(text):
@@ -1439,6 +1444,27 @@ class MainFrame(wx.Frame):
         dlg.Destroy()
         self.input.SetFocus()
 
+    TYPED = {}
+    for _kind, _words in (
+            ("inventory", "i inv inventory инвентарь вещи інвентар речі"),
+            ("equipment", "eq equip equipment снаряжение экипировка одежда спорядження екіпірування одяг"),
+            ("who", "who кто хто"),
+            ("shop", "list список ассортимент асортимент"),
+            ("services", "service услуга послуга"),
+            ("training", "train gain тренировать тренировки тренувати тренування"),
+            ("skills", "prac practice практиковать практикувати")):
+        for _w in _words.split():
+            TYPED[_w] = _kind
+
+    def typed_list(self, text):
+        if not self.prefs.get("list_menus", True) or not self.conn.in_world or self.capture or self.items_dlg:
+            return False
+        kind = self.TYPED.get(text.strip().lower())
+        if not kind:
+            return False
+        self.open_items(kind)
+        return True
+
     LISTS = {"inventory": ("inventory", "items.inventory"), "equipment": ("equipment", "items.equipment"),
              "room": ("look", "items.room"), "who": ("who", "items.who")}
 
@@ -1448,11 +1474,14 @@ class MainFrame(wx.Frame):
         if kind in self.LISTS:
             command, key = self.LISTS[kind]
             title = self.tr(key)
+        elif kind in textlists.PARSERS:
+            command, _parser, key, _keys = textlists.PARSERS[kind]
+            title = self.tr(key)
         if self.capture and self.capture.get("timer"):
             self.capture["timer"].Stop()
         self.capture = {"kind": kind, "title": title, "container": container, "lines": [],
                         "timer": wx.CallLater(3000, self.finish_capture)}
-        self.send_command(command)
+        self.send_command(command, echo=False)
 
     REFRESH_VERBS = {"drop", "sacrifice", "wear", "remove", "get", "kill"}
 
@@ -1463,8 +1492,13 @@ class MainFrame(wx.Frame):
         if cap.get("timer"):
             cap["timer"].Stop()
         rows = []
+        keys_text = None
         compare = self.tr("items.compare")
-        for line in cap["lines"]:
+        if cap["kind"] in textlists.PARSERS:
+            _cmd, parser, _title, keys_key = textlists.PARSERS[cap["kind"]]
+            rows = parser(cap["lines"], self.tr)
+            keys_text = self.tr(keys_key)
+        for line in (cap["lines"] if cap["kind"] not in textlists.PARSERS else []):
             for link in line.links:
                 if not link.menu:
                     continue
@@ -1479,8 +1513,8 @@ class MainFrame(wx.Frame):
                     break
         self.items_view = cap
         if self.items_dlg:
-            return self.items_dlg.set_rows(cap["title"], rows)
-        dlg = dialogs.ItemsDialog(self, self.tr, cap["title"], rows, self.item_action)
+            return self.items_dlg.set_rows(cap["title"], rows, keys_text)
+        dlg = dialogs.ItemsDialog(self, self.tr, cap["title"], rows, self.item_action, keys_text)
         self.items_dlg = dlg
         dlg.ShowModal()
         self.items_dlg = None
@@ -1489,6 +1523,13 @@ class MainFrame(wx.Frame):
 
     def item_action(self, choice):
         how, what, row = choice
+        if row.get("kind") == "custom":
+            cmds = what if how == "commands" else [what]
+            for cmd in cmds:
+                self.send_command(cmd)
+            if any(cmd in row.get("refresh", set()) for cmd in cmds):
+                self.refresh_items(len(cmds))
+            return
         if how == "command":
             self.send_command(what)
             return self.refresh_items(1)
@@ -1512,13 +1553,15 @@ class MainFrame(wx.Frame):
         if not view or not self.items_dlg:
             return
         command = {"inventory": "inventory", "equipment": "equipment", "room": "look", "who": "who"}.get(view["kind"])
+        if view["kind"] in textlists.PARSERS:
+            command = textlists.PARSERS[view["kind"]][0]
         if view["kind"] == "container":
             command = "look in " + view["container"]
         if not command:
             return
         self.capture = {"kind": view["kind"], "title": view["title"], "container": view.get("container"),
                         "lines": [], "timer": wx.CallLater(3000, self.finish_capture)}
-        self.send_command(command)
+        self.send_command(command, echo=False)
 
     def item_verbs(self, verbs, row):
         ident = row["ident"]

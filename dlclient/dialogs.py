@@ -1443,13 +1443,14 @@ class ItemsDialog(wx.Dialog):
                    (ord("T"), True): ["tell"]},
     }
 
-    def __init__(self, parent, tr, title, rows, act):
+    def __init__(self, parent, tr, title, rows, act, keys_text=None):
         super().__init__(parent, title=title, size=wx.Size(640, 500),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.tr, self.rows, self.act = tr, rows, act
         self.choice = None
         s = wx.BoxSizer(wx.VERTICAL)
-        s.Add(wx.StaticText(self, label=tr("items.keys")), 0, wx.ALL, 6)
+        self.keys_label = wx.StaticText(self, label=keys_text or tr("items.keys"))
+        s.Add(self.keys_label, 0, wx.ALL, 6)
         self.list = labelled(self, s, title, wx.ListBox(self, choices=[r["label"] for r in rows] or [tr("items.none")]),
                              expand="grow")
         if rows:
@@ -1469,6 +1470,7 @@ class ItemsDialog(wx.Dialog):
         combos = set()
         for table in self.KEYS.values():
             combos.update(table)
+        combos.update({(ord("B"), True), (ord("P"), True), (ord("H"), True)})
         for key, alt in combos:
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, k=key, a=alt: self.shortcut(k, a), id=ident)
@@ -1479,6 +1481,11 @@ class ItemsDialog(wx.Dialog):
     def shortcut(self, key, alt):
         row = self.current()
         if not row:
+            return
+        if row.get("keys") is not None:
+            cmds = row["keys"].get((key, alt))
+            if cmds:
+                self.pick(("commands", cmds, row))
             return
         verbs = self.KEYS.get(row["kind"], {}).get((key, alt))
         if verbs:
@@ -1493,6 +1500,8 @@ class ItemsDialog(wx.Dialog):
         if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) and not event.HasAnyModifiers():
             return self.menu()
         row = self.current()
+        if row and row.get("keys") is not None:
+            return event.Skip()
         if row:
             verbs = self.KEYS.get(row["kind"], {}).get((key, event.AltDown()))
             if verbs and not event.ControlDown() and not event.ShiftDown():
@@ -1518,7 +1527,9 @@ class ItemsDialog(wx.Dialog):
         self.choice = choice
         self.act(choice)
 
-    def set_rows(self, title, rows):
+    def set_rows(self, title, rows, keys_text=None):
+        if keys_text:
+            self.keys_label.SetLabel(keys_text)
         keep = self.list.GetSelection()
         self.rows = rows
         self.SetTitle(title)
