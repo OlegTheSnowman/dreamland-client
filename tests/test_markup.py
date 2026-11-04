@@ -97,8 +97,7 @@ class ColourExitsTest(unittest.TestCase):
 
 class LookHintTest(unittest.TestCase):
     def test_hint_split_from_next_line(self):
-        lines, _, _ = OutputParser().parse("You can look at: tapestry, painting. <m i='9' c='get $'>A corpse</m> lies here.
-")
+        lines, _, _ = OutputParser().parse("You can look at: tapestry, painting. <m i='9' c='get $'>A corpse</m> lies here.\n")
         self.assertEqual([l.text for l in lines], ["You can look at: tapestry, painting.", "A corpse lies here."])
         self.assertEqual(lines[1].text[lines[1].links[0].start:lines[1].links[0].end], "A corpse")
 
