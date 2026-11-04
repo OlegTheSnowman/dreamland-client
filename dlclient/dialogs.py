@@ -800,6 +800,7 @@ class AutoLoginDialog(wx.Dialog):
         add.Bind(wx.EVT_BUTTON, self.on_add)
         remove.Bind(wx.EVT_BUTTON, self.on_remove)
         self.list.Bind(wx.EVT_LISTBOX, self.on_pick)
+        self.name.Bind(wx.EVT_SET_FOCUS, self.on_name_focus)
         ok = ok_cancel(self, s, tr)
         ok.Bind(wx.EVT_BUTTON, self.on_ok)
         self.SetSizer(s)
@@ -816,12 +817,16 @@ class AutoLoginDialog(wx.Dialog):
         self.list.Set(rows or [self.tr("al2.none")])
         if self.chars:
             self.list.SetSelection(self.chars.index(keep) if keep in self.chars else 0)
+        self.on_pick(None)
 
     def on_pick(self, event):
         i = self.list.GetSelection()
-        if 0 <= i < len(self.chars):
-            self.name.SetValue(self.chars[i])
-            self.password.SetValue("")
+        self.name.SetValue(self.chars[i] if 0 <= i < len(self.chars) else "")
+        self.password.SetValue("")
+
+    def on_name_focus(self, event):
+        event.Skip()
+        wx.CallAfter(self.name.SelectAll)
 
     def on_add(self, event):
         name = self.name.GetValue().strip()
