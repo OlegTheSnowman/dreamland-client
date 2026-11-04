@@ -903,3 +903,90 @@ class RoomsDialog(wx.Dialog):
         if 0 <= i < len(self.shown):
             self.choice = (self.shown[i][0], how, self.shown[i][1])
             self.EndModal(wx.ID_OK)
+
+
+SOUND_TYPES = ["combat", "alert", "chat", "ui", "ambient", "music"]
+SOUND_SAMPLE = {"combat": "combat/hit", "alert": "alert/bell", "chat": "chat/tell", "ui": "ui/notify"}
+
+
+class SoundDialog(wx.Dialog):
+    def __init__(self, parent, tr, prefs, player):
+        super().__init__(parent, title=tr("snd.title"))
+        self.prefs = prefs
+        self.player = player
+        s = wx.BoxSizer(wx.VERTICAL)
+        s.Add(wx.StaticText(self, label=tr("snd.intro")), 0, wx.ALL, 6)
+        self.on = wx.CheckBox(self, label=tr("snd.on"))
+        self.on.SetValue(not prefs.get("mute"))
+        self.on.Bind(wx.EVT_CHECKBOX, self.on_toggle)
+        s.Add(self.on, 0, wx.ALL, 6)
+        self.master = self._slider(s, tr("snd.master"), prefs.get("master", 80), None, tr)
+        self.master.Bind(wx.EVT_SLIDER, lambda e: self._set_master())
+        box = wx.StaticBoxSizer(wx.VERTICAL, self, tr("snd.types"))
+        self.sliders = {}
+        types = prefs.setdefault("types", {})
+        for kind in SOUND_TYPES:
+            sl = self._slider(box, tr("snd.type." + kind), types.get(kind, 100), kind, tr, parent=box.GetStaticBox())
+            sl.Bind(wx.EVT_SLIDER, lambda e, k=kind: self._set_type(k))
+            self.sliders[kind] = sl
+        s.Add(box, 0, wx.EXPAND | wx.ALL, 6)
+        ok = wx.Button(self, wx.ID_OK, tr("ok"))
+        ok.SetDefault()
+        s.Add(ok, 0, wx.ALL | wx.ALIGN_RIGHT, 6)
+        self.SetEscapeId(wx.ID_OK)
+        self.SetSizerAndFit(s)
+        self.on.SetFocus()
+
+    def _slider(self, sizer, label, value, kind, tr, parent=None):
+        parent = parent or self
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        row.Add(wx.StaticText(parent, label=label), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 6)
+        sl = wx.Slider(parent, value=int(value), minValue=0, maxValue=100, size=(220, -1))
+        sl.SetName(label)
+        sl._acc = NamedAccessible(sl, label)
+        sl.SetPageSize(10)
+        row.Add(sl, 1, wx.EXPAND | wx.ALL, 6)
+        if kind in SOUND_SAMPLE:
+            b = wx.Button(parent, label=tr("snd.play"))
+            b._acc = NamedAccessible(b, tr("snd.play") + ": " + label)
+            b.Bind(wx.EVT_BUTTON, lambda e, k=kind: self.player.try_sound(SOUND_SAMPLE[k], k))
+            row.Add(b, 0, wx.ALL, 6)
+        sizer.Add(row, 0, wx.EXPAND)
+        return sl
+
+    def on_toggle(self, event):
+        self.prefs["mute"] = not self.on.GetValue()
+        if self.prefs["mute"]:
+            self.player.stop_all()
+
+    def _set_master(self):
+        self.prefs["master"] = self.master.GetValue()
+
+    def _set_type(self, kind):
+        self.prefs.setdefault("types", {})[kind] = self.sliders[kind].GetValue()
+
+
+class SpeechFilterDialog(wx.Dialog):
+    def __init__(self, parent, tr, words):
+        super().__init__(parent, title=tr("sf.title"), size=(560, 400),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.text = labelled(self, s, tr("sf.label"), wx.TextCtrl(self, value="\n".join(words),
+                                                                   style=wx.TE_MULTILINE), expand="grow")
+        ok_cancel(self, s, tr)
+        self.SetSizer(s)
+        self.text.SetFocus()
+
+    def words(self):
+        return [w.strip() for w in self.text.GetValue().splitlines() if w.strip()]
+
+
+class FindDialog(wx.Dialog):
+    def __init__(self, parent, tr, value):
+        super().__init__(parent, title=tr("find.title"))
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.text = labelled(self, s, tr("find.label"), wx.TextCtrl(self, value=value, size=(360, -1)))
+        ok_cancel(self, s, tr)
+        self.SetSizerAndFit(s)
+        self.text.SelectAll()
+        self.text.SetFocus()

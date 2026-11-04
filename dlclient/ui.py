@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 import threading
@@ -20,6 +21,8 @@ from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
 from .speech import Speech
 from .telnet import Telnet
+from . import updater
+from .version import REPO, VERSION
 
 _DIRS = {"kp8": "north", "kp2": "south", "kp4": "west", "kp6": "east", "kp9": "up", "kp1": "down"}
 DEFAULT_KEYS = dict(_DIRS)
@@ -28,6 +31,25 @@ DEFAULT_KEYS["kp5"] = "scan"
 
 KEYPAD_CODES = {"kp%d" % i: 96 + i for i in range(10)}
 KEYPAD_CODES.update({"kp*": 106, "kp+": 107, "kp-": 109, "kp.": 110, "kp/": 111})
+
+THEMES = {
+    "dark": ("#0d0b12", "#e3d8c0"),
+    "light": ("#fbf8f1", "#1d1a14"),
+}
+
+PALETTE_DARK = {
+    "fgdd": "#2e3436", "fgdr": "#cc0000", "fgdg": "#4e9a06", "fgdy": "#c4a000", "fgdb": "#3465a4",
+    "fgdm": "#75507b", "fgdc": "#06989a", "fgdw": "#d3d7cf", "fgbd": "#555753", "fgbr": "#ed2330",
+    "fgbg": "#8ee34f", "fgby": "#fdea56", "fgbb": "#55a3f2", "fgbm": "#d384cb", "fgbc": "#2cf4eb",
+    "fgbw": "#ffffff", "fgbx": "#ffffff",
+}
+
+PALETTE_LIGHT = {
+    "fgdd": "#2e3436", "fgdr": "#a40000", "fgdg": "#3a7304", "fgdy": "#7a6400", "fgdb": "#204a87",
+    "fgdm": "#5c3566", "fgdc": "#04696b", "fgdw": "#4a4a46", "fgbd": "#555753", "fgbr": "#c4161f",
+    "fgbg": "#2f7d10", "fgby": "#8a6d00", "fgbb": "#1f5fbf", "fgbm": "#8f3d87", "fgbc": "#00787a",
+    "fgbw": "#000000", "fgbx": "#000000",
+}
 
 MAX_LINES = 20000
 TRIM_LINES = 4000
@@ -55,6 +77,13 @@ class MainFrame(wx.Frame):
             self.sound_refreshed = time.time()
             threading.Thread(target=self._update_sounds, args=(live,), daemon=True).start()
         self.parser = OutputParser()
+        self.parser.comma_exits = bool(self.prefs.get("comma_exits"))
+        self.find_text = ""
+        self.find_row = None
+        self.log_file = None
+        self.palette = {}
+        self.link_colour = None
+        self.link_font = None
         self.telnet = Telnet()
         self.conn = Connection(self._frame_from_thread, self._state_from_thread)
         later = lambda secs, fn: wx.CallLater(int(secs * 1000), fn)
@@ -103,9 +132,14 @@ class MainFrame(wx.Frame):
 
         self._build()
         self._build_menu()
+        self.apply_theme()
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.input.SetFocus()
+        if self.prefs.get("log_session") and not os.environ.get("DLCLIENT_QUIET"):
+            self.open_log()
         wx.CallAfter(self.connect)
+        if updater.frozen() and self.prefs.get("check_updates", True) and not os.environ.get("DLCLIENT_QUIET"):
+            wx.CallLater(5000, lambda: self.check_updates(quiet=True))
 
     def _build(self):
         panel = wx.Panel(self)
@@ -138,6 +172,13 @@ class MainFrame(wx.Frame):
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, fn=fn: fn(), id=ident)
             accel.append((wx.ACCEL_ALT, key, ident))
+        for flags, key, fn in ((wx.ACCEL_CTRL, ord("="), lambda: self.change_font(1)),
+                               (wx.ACCEL_CTRL, wx.WXK_NUMPAD_ADD, lambda: self.change_font(1)),
+                               (wx.ACCEL_CTRL, ord("-"), lambda: self.change_font(-1)),
+                               (wx.ACCEL_CTRL, wx.WXK_NUMPAD_SUBTRACT, lambda: self.change_font(-1))):
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, fn=fn: fn(), id=ident)
+            accel.append((flags, key, ident))
         self.SetAcceleratorTable(wx.AcceleratorTable(accel))
 
     def _build_menu(self):
@@ -153,6 +194,10 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.chat"), lambda e: self.open_chat())
         self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
+        game.AppendSeparator()
+        self._item(game, tr("menu.find"), lambda e: self.find_ask())
+        self._item(game, tr("menu.findnext"), lambda e: self.find_step(-1))
+        self._item(game, tr("menu.findprev"), lambda e: self.find_step(1))
         game.AppendSeparator()
         self._item(game, tr("menu.exit"), lambda e: self.Close())
         mb.Append(game, tr("menu.game"))
@@ -186,6 +231,34 @@ class MainFrame(wx.Frame):
         self.hideprompt_item = it
         self._item(opts, tr("menu.volume_up"), lambda e: self.change_volume(10))
         self._item(opts, tr("menu.volume_down"), lambda e: self.change_volume(-10))
+        self._item(opts, tr("menu.sound"), lambda e: self.open_sound())
+        opts.AppendSeparator()
+        look = wx.Menu()
+        for code in ("dark", "light", "system"):
+            it = look.AppendRadioItem(wx.ID_ANY, tr("theme." + code))
+            it.Check(code == self.prefs.get("theme", "dark"))
+            self.Bind(wx.EVT_MENU, lambda e, c=code: self.set_theme(c), it)
+        look.AppendSeparator()
+        it = look.AppendCheckItem(wx.ID_ANY, tr("menu.colors"))
+        it.Check(bool(self.prefs.get("game_colors", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_colors(), it)
+        self.colors_item = it
+        self._item(look, tr("menu.font"), lambda e: self.choose_font())
+        self._item(look, tr("font.bigger"), lambda e: self.change_font(1))
+        self._item(look, tr("font.smaller"), lambda e: self.change_font(-1))
+        opts.AppendSubMenu(look, tr("menu.appearance"))
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.exits"))
+        it.Check(bool(self.prefs.get("comma_exits")))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_exits(), it)
+        self.exits_item = it
+        self._item(opts, tr("menu.speechfilter"), lambda e: self.open_speech_filter())
+        self._item(opts, tr("menu.stopspeech"), lambda e: self.speech.silence())
+        opts.AppendSeparator()
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.log"))
+        it.Check(bool(self.prefs.get("log_session")))
+        self.Bind(wx.EVT_MENU, lambda e: self.toggle_log(), it)
+        self.log_item = it
+        self._item(opts, tr("menu.logs"), lambda e: self.open_folder(self.logs_folder()))
         mb.Append(opts, tr("menu.options"))
 
         tools = wx.Menu()
@@ -200,6 +273,13 @@ class MainFrame(wx.Frame):
         hlp = wx.Menu()
         self._item(hlp, tr("menu.keys"), lambda e: self.show_text(tr("keys.title"), tr("keys.text")))
         self._item(hlp, tr("menu.credits"), lambda e: self.show_credits())
+        hlp.AppendSeparator()
+        self._item(hlp, tr("menu.updates"), lambda e: self.check_updates(quiet=False))
+        it = hlp.AppendCheckItem(wx.ID_ANY, tr("menu.autoupdate"))
+        it.Check(bool(self.prefs.get("check_updates", True)))
+        self.Bind(wx.EVT_MENU, lambda e: self.prefs.__setitem__("check_updates", e.IsChecked()), it)
+        self._item(hlp, tr("menu.folder"), lambda e: self.open_folder(prefs_mod.folder()))
+        self._item(hlp, tr("menu.about"), lambda e: self.show_text(tr("about.title"), tr("about.text", VERSION, REPO)))
         mb.Append(hlp, tr("menu.help"))
 
         self.SetMenuBar(mb)
@@ -393,7 +473,9 @@ class MainFrame(wx.Frame):
                     self.send_command("|".join(l.command for l in line.links if l.command))
                     break
         if self.prefs.get("speech"):
-            spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">")
+            skip = [w.lower() for w in self.prefs.get("speech_skip") or []]
+            spoken = "\n".join(l.text for l in lines if l.text.strip() and l.text.strip() != ">"
+                               and not any(w in l.text.lower() for w in skip))
             self.speech.say(spoken)
 
     def append_lines(self, lines, complete):
@@ -405,6 +487,7 @@ class MainFrame(wx.Frame):
         base = out.GetLastPosition()
         starts = []
         chunks = []
+        styles = []
         for i, line in enumerate(lines):
             if i > 0 and self.lines[-1][0]:
                 self.lines.append(["", []])
@@ -415,6 +498,17 @@ class MainFrame(wx.Frame):
             text = line.text
             if not cur[0] and not text.strip():
                 text = ""
+            at = starts[-1]
+            if self.palette:
+                for a, b, cls in getattr(line, "colors", ()):
+                    b = min(b, len(text))
+                    colour = self.palette.get(cls)
+                    if colour and b > a:
+                        styles.append((at + a, at + b, colour, False))
+            if self.link_colour:
+                for l in line.links:
+                    if l.end <= len(text):
+                        styles.append((at + l.start, at + l.end, self.link_colour if not self.palette else None, True))
             for l in line.links:
                 l.start += shift
                 l.end += shift
@@ -425,6 +519,19 @@ class MainFrame(wx.Frame):
             self.lines.append(["", []])
             chunks.append("\n")
         out.AppendText("".join(chunks))
+        for a, b, colour, underline in styles:
+            attr = wx.TextAttr()
+            if colour:
+                attr.SetTextColour(colour)
+            if underline and self.link_font:
+                attr.SetFont(self.link_font)
+            out.SetStyle(a, b, attr)
+        if self.log_file:
+            try:
+                self.log_file.write("".join(chunks))
+                self.log_file.flush()
+            except (OSError, ValueError):
+                self.log_file = None
         if len(self.lines) > MAX_LINES:
             cut = sum(len(t) + 1 for t, _ in self.lines[:TRIM_LINES])
             del self.lines[:TRIM_LINES]
@@ -924,7 +1031,12 @@ class MainFrame(wx.Frame):
             dlg.Destroy()
 
     def update_status(self):
-        pass
+        p = self.prompt
+        if "hit" in p:
+            title = "%s - %s/%shp %s/%smn %s/%smv" % (self.tr("app.title"), p.get("hit"), p.get("max_hit"),
+                                                     p.get("mana"), p.get("max_mana"), p.get("move"), p.get("max_move"))
+            if title != self.GetTitle():
+                self.SetTitle(title)
 
     def status_text(self):
         p = self.prompt
@@ -1077,7 +1189,220 @@ class MainFrame(wx.Frame):
                                                      s.get("license", ""), s.get("source", "")))
         self.show_text(self.tr("credits.title"), "\n".join(rows))
 
+    def apply_theme(self, recolour=True):
+        theme = self.prefs.get("theme", "dark")
+        if theme in THEMES:
+            bg, fg = (wx.Colour(c) for c in THEMES[theme])
+        else:
+            bg = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+            fg = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOWTEXT)
+        dark = (bg.Red() * 299 + bg.Green() * 587 + bg.Blue() * 114) / 1000 < 128
+        palette = PALETTE_DARK if dark else PALETTE_LIGHT
+        self.palette = {k: wx.Colour(v) for k, v in palette.items()} if self.prefs.get("game_colors", True) else {}
+        self.link_colour = wx.Colour("#7fb6ff" if dark else "#1f5fbf")
+        f = self.prefs.get("font") or {}
+        font = wx.Font(wx.FontInfo(int(f.get("size", 12))).FaceName(f.get("face") or "Consolas"))
+        if not font.IsOk():
+            font = wx.Font(wx.FontInfo(int(f.get("size", 12))).Family(wx.FONTFAMILY_TELETYPE))
+        self.link_font = font.Underlined()
+        for ctrl in (self.output, self.input):
+            ctrl.SetBackgroundColour(bg)
+            ctrl.SetForegroundColour(fg)
+            ctrl.SetFont(font)
+        self.panel.SetBackgroundColour(bg)
+        base = wx.TextAttr(fg, bg, font)
+        self.output.SetDefaultStyle(base)
+        last = self.output.GetLastPosition()
+        if last:
+            if recolour:
+                self.output.SetStyle(0, last, base)
+            else:
+                only_font = wx.TextAttr()
+                only_font.SetFont(font)
+                self.output.SetStyle(0, last, only_font)
+        self.input.SetDefaultStyle(base)
+        self.output.Refresh()
+        self.input.Refresh()
+
+    def set_theme(self, code):
+        self.prefs["theme"] = code
+        self.apply_theme()
+        self.say(self.tr("theme." + code).replace("&", ""))
+
+    def toggle_colors(self):
+        self.prefs["game_colors"] = not self.prefs.get("game_colors", True)
+        self.colors_item.Check(self.prefs["game_colors"])
+        self.apply_theme()
+        self.say(self.tr("colors.on" if self.prefs["game_colors"] else "colors.off"))
+
+    def choose_font(self):
+        data = wx.FontData()
+        data.SetInitialFont(self.output.GetFont())
+        data.EnableEffects(False)
+        dlg = wx.FontDialog(self, data)
+        if dlg.ShowModal() == wx.ID_OK:
+            font = dlg.GetFontData().GetChosenFont()
+            self.prefs["font"] = {"face": font.GetFaceName(), "size": font.GetPointSize()}
+            self.apply_theme(recolour=False)
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def change_font(self, step):
+        f = self.prefs.setdefault("font", {"face": "Consolas", "size": 12})
+        f["size"] = max(7, min(40, int(f.get("size", 12)) + step))
+        self.apply_theme(recolour=False)
+        self.say(self.tr("font.size", f["size"]))
+
+    def toggle_exits(self):
+        self.prefs["comma_exits"] = not self.prefs.get("comma_exits")
+        self.parser.comma_exits = self.prefs["comma_exits"]
+        self.exits_item.Check(self.prefs["comma_exits"])
+        self.say(self.tr("exits.on" if self.prefs["comma_exits"] else "exits.off"))
+
+    def open_sound(self):
+        dlg = dialogs.SoundDialog(self, self.tr, self.prefs["sound"], self.sound)
+        dlg.ShowModal()
+        dlg.Destroy()
+        self.mute_item.Check(bool(self.prefs["sound"].get("mute")))
+        self.input.SetFocus()
+
+    def open_speech_filter(self):
+        dlg = dialogs.SpeechFilterDialog(self, self.tr, self.prefs.get("speech_skip") or [])
+        if dlg.ShowModal() == wx.ID_OK:
+            self.prefs["speech_skip"] = dlg.words()
+        dlg.Destroy()
+        self.input.SetFocus()
+
+    def logs_folder(self):
+        path = os.path.join(prefs_mod.folder(), "logs")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def open_log(self):
+        name = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S") + ".txt"
+        path = os.path.join(self.logs_folder(), name)
+        try:
+            self.log_file = open(path, "a", encoding="utf-8", newline="\r\n")
+        except OSError:
+            self.log_file = None
+            return None
+        return path
+
+    def toggle_log(self):
+        self.prefs["log_session"] = not self.prefs.get("log_session")
+        self.log_item.Check(self.prefs["log_session"])
+        if self.prefs["log_session"]:
+            path = self.open_log()
+            if path:
+                self.say(self.tr("log.on", os.path.basename(path)))
+        else:
+            if self.log_file:
+                self.log_file.close()
+            self.log_file = None
+            self.say(self.tr("log.off"))
+
+    def open_folder(self, path):
+        try:
+            os.startfile(path)
+        except OSError:
+            pass
+
+    def find_ask(self):
+        dlg = dialogs.FindDialog(self, self.tr, self.find_text)
+        ok = dlg.ShowModal() == wx.ID_OK
+        text = dlg.text.GetValue().strip()
+        dlg.Destroy()
+        if not ok or not text:
+            self.input.SetFocus()
+            return
+        self.find_text = text
+        self.find_row = None
+        self.find_step(-1)
+
+    def find_step(self, direction):
+        if not self.find_text:
+            return self.say(self.tr("find.first"))
+        needle = self.find_text.lower()
+        if self.find_row is None or self.find_row >= len(self.lines):
+            row = len(self.lines)
+        else:
+            row = self.find_row
+        row += direction
+        while 0 <= row < len(self.lines):
+            text = self.lines[row][0]
+            col = text.lower().find(needle)
+            if col >= 0 and id(self.lines[row]) not in self.echo_lines:
+                self.find_row = row
+                pos = sum(len(t) + 1 for t, _ in self.lines[:row]) + col
+                self.output.SetFocus()
+                self.output.SetInsertionPoint(pos)
+                self.output.ShowPosition(pos)
+                return self.say(text.strip())
+            row += direction
+        self.say(self.tr("find.none", self.find_text))
+
+    def check_updates(self, quiet):
+        if not quiet:
+            self.say(self.tr("upd.checking"))
+
+        def work():
+            try:
+                info = updater.latest()
+            except Exception as e:
+                if not quiet:
+                    wx.CallAfter(self.notice, self.tr("upd.fail", e))
+                return
+            wx.CallAfter(self._update_found, info, quiet)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_found(self, info, quiet):
+        if not info.get("tag") or not updater.is_newer(info["tag"]):
+            if not quiet:
+                self.notice(self.tr("upd.none", VERSION))
+            return
+        dlg = wx.MessageDialog(self, self.tr("upd.ask", info["tag"].lstrip("v"), VERSION, info["notes"].strip()),
+                               self.tr("upd.title"), wx.YES_NO | wx.YES_DEFAULT | wx.ICON_INFORMATION)
+        yes = dlg.ShowModal() == wx.ID_YES
+        dlg.Destroy()
+        self.input.SetFocus()
+        if not yes:
+            return
+        if not updater.frozen() or not info.get("url"):
+            self.notice(self.tr("upd.source"))
+            if info.get("page"):
+                webbrowser.open(info["page"])
+            return
+        self.notice(self.tr("upd.downloading"))
+        last = [0]
+
+        def progress(pct):
+            if pct >= last[0] + 25:
+                last[0] = pct
+                wx.CallAfter(self.say, self.tr("upd.progress", pct), False)
+
+        def work():
+            try:
+                folder, root = updater.download(info["url"], progress)
+            except Exception as e:
+                wx.CallAfter(self.notice, self.tr("upd.fail", e))
+                return
+            wx.CallAfter(self._install_update, folder, root)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _install_update(self, folder, root):
+        try:
+            updater.apply_and_restart(folder, root)
+        except Exception as e:
+            return self.notice(self.tr("upd.fail", e))
+        self.Close()
+
     def on_close(self, event):
+        if self.log_file:
+            try:
+                self.log_file.close()
+            except OSError:
+                pass
+            self.log_file = None
         self.prefs["history"] = self.history[-HISTORY_MAX:]
         if not os.environ.get("DLCLIENT_QUIET"):
             try:

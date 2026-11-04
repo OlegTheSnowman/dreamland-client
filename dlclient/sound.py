@@ -167,6 +167,20 @@ class SoundPlayer:
             self.preview_channel.set_volume(self.gain(entry.get("type", "ui"), 100) or 0.0)
             self.preview_channel.play(self._sound(entry))
 
+    def try_sound(self, name, kind):
+        if not self.ok:
+            return
+        entry = self.resolve(name)
+        if not entry or not self.path_for(entry["file"]):
+            return
+        try:
+            snd = self._sound(entry)
+        except Exception:
+            return
+        self.preview_channel.stop()
+        self.preview_channel.set_volume(self.gain(kind, 100))
+        self.preview_channel.play(snd)
+
     def stop_all(self):
         if self.ok:
             pygame.mixer.stop()

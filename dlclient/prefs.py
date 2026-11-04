@@ -13,6 +13,13 @@ DEFAULTS = {
         "master": 80,
         "types": {"combat": 100, "alert": 100, "chat": 100, "ui": 100, "ambient": 60, "music": 50},
     },
+    "theme": "dark",
+    "game_colors": True,
+    "font": {"face": "Consolas", "size": 12},
+    "speech_skip": [],
+    "log_session": False,
+    "comma_exits": False,
+    "check_updates": True,
     "history": [],
     "vars": {},
 }

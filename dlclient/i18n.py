@@ -233,8 +233,13 @@ STRINGS = {
 
 from .i18n_tools import TOOLS
 
+from .i18n_extra import EXTRA
+
 for _lang, _strings in TOOLS.items():
     STRINGS[_lang].update(_strings)
+for _lang, _strings in EXTRA.items():
+    STRINGS[_lang].update(_strings)
+    STRINGS[_lang]["keys.text"] += _strings["keys.extra"]
 
 
 class Tr:
