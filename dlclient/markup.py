@@ -30,6 +30,7 @@ class Link:
     url: str = ""
     menu: list = field(default_factory=list)
     confirm: bool = False
+    ident: str = ""
 
 
 @dataclass
@@ -160,6 +161,7 @@ class _Parser(HTMLParser):
             if not [m for m in menu if m]:
                 return
             link.menu = menu
+            link.ident = ident
         self.links.append(link)
 
 
@@ -198,7 +200,7 @@ class OutputParser:
         offset = 0
         for chunk in text.split("\n"):
             end = offset + len(chunk)
-            links = [Link(l.start - offset, l.end - offset, l.label, l.command, l.url, l.menu, l.confirm)
+            links = [Link(l.start - offset, l.end - offset, l.label, l.command, l.url, l.menu, l.confirm, l.ident)
                      for l in p.links if l.start >= offset and l.end <= end]
             colors = [(max(a, offset) - offset, min(b, end) - offset, c)
                       for a, b, c in p.colors if a < end and b > offset]

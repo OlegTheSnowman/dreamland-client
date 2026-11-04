@@ -21,6 +21,7 @@ from .mapview import AreaMap
 from .helpsearch import HelpSearch
 from . import status as status_mod
 from .scripting import new_id
+from .presence import classify
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -129,6 +130,7 @@ class MainFrame(wx.Frame):
         self.walk_name = ""
         self.walk_then = None
         self.tone_room = None
+        self.room_lines = []
         self.help_search = HelpSearch(prefs_mod.folder())
         self.autobuff_dlg = None
         self.account_wait = None
@@ -281,6 +283,13 @@ class MainFrame(wx.Frame):
         it.Check(bool(self.prefs.get("exit_tones", True)))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_tones(), it)
         self.tones_item = it
+        room = wx.Menu()
+        sounds = self.prefs.setdefault("room_sounds", {})
+        for kind in ("player", "mob", "item", "target"):
+            it = room.AppendCheckItem(wx.ID_ANY, tr("rs." + kind))
+            it.Check(bool(sounds.get(kind, True)))
+            self.Bind(wx.EVT_MENU, lambda e, k=kind: self.toggle_room_sound(k, e.IsChecked()), it)
+        opts.AppendSubMenu(room, tr("menu.roomsounds"))
         it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.log"))
         it.Check(bool(self.prefs.get("log_session")))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_log(), it)
@@ -508,6 +517,8 @@ class MainFrame(wx.Frame):
             lines[-1].text, lines[-1].links = "", []
         self.prompt_due = False
         starts = self.append_lines(lines, complete)
+        self.room_lines.extend(lines)
+        del self.room_lines[:-200]
         self.run_triggers(lines, starts)
         if self.walk_until and time.time() < self.walk_until:
             head = "'%s'" % self.walk_name
@@ -1338,24 +1349,42 @@ class MainFrame(wx.Frame):
 
     TONE_ORDER = (("n", "north"), ("e", "east"), ("s", "south"), ("w", "west"), ("u", "up"), ("d", "down"))
 
+    ROOM_SOUND_ORDER = ("target", "player", "mob", "item")
+
     def play_exit_tones(self):
         room = self.prompt.get("vnum")
+        seen, self.room_lines = self.room_lines, []
         if room is None or room == self.tone_room:
             return
         first = self.tone_room is None
         self.tone_room = room
-        if first or not self.prefs.get("exit_tones", True):
+        if first:
             return
+        dirs = []
         exits = self.prompt.get("exits")
-        if not isinstance(exits, dict):
-            return
-        visible = str(exits.get("e") or "").lower()
-        dirs = [name for letter, name in self.TONE_ORDER if letter in visible]
+        if self.prefs.get("exit_tones", True) and isinstance(exits, dict):
+            visible = str(exits.get("e") or "").lower()
+            dirs = [name for letter, name in self.TONE_ORDER if letter in visible]
         for i, name in enumerate(dirs):
             if i == 0:
                 self.sound.exit_tone(name, i)
             else:
                 wx.CallLater(130 * i, self.sound.exit_tone, name, i)
+        wanted = self.prefs.get("room_sounds") or {}
+        present = classify(seen)
+        kinds = [k for k in self.ROOM_SOUND_ORDER if k in present and wanted.get(k, True)]
+        at = 130 * len(dirs) + (120 if dirs else 0)
+        for j, kind in enumerate(kinds):
+            delay = at + 160 * j
+            if delay:
+                wx.CallLater(delay, self.sound.exit_tone, kind, len(dirs) + j, "room")
+            else:
+                self.sound.exit_tone(kind, j, "room")
+
+    def toggle_room_sound(self, kind, on):
+        self.prefs.setdefault("room_sounds", {})[kind] = on
+        self.say(self.tr("rs.state", self.tr("rs." + kind).replace("&", ""),
+                         self.tr("rs.on" if on else "rs.off")))
 
     def toggle_tones(self):
         self.prefs["exit_tones"] = not self.prefs.get("exit_tones", True)

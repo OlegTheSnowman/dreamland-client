@@ -167,12 +167,12 @@ class SoundPlayer:
             self.preview_channel.set_volume(self.gain(entry.get("type", "ui"), 100) or 0.0)
             self.preview_channel.play(self._sound(entry))
 
-    def exit_tone(self, direction, index):
+    def exit_tone(self, direction, index, folder="exits"):
         if not self.ok or self.prefs.get("mute"):
             return
-        key = "exits/" + direction
+        key = folder + "/" + direction
         if key not in self.cache:
-            path = os.path.join(self.folder, "exits", direction + ".wav")
+            path = os.path.join(self.folder, folder, direction + ".wav")
             try:
                 self.cache[key] = pygame.mixer.Sound(path)
             except Exception:

@@ -20,6 +20,7 @@ DEFAULTS = {
     "log_session": False,
     "check_updates": True,
     "exit_tones": True,
+    "room_sounds": {"player": True, "mob": True, "item": True, "target": True},
     "server": "",
     "history": [],
     "vars": {},
