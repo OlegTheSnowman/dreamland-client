@@ -1465,7 +1465,24 @@ class ItemsDialog(wx.Dialog):
         actions.Bind(wx.EVT_BUTTON, lambda e: self.menu())
         self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.menu())
         self.list.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        accel = []
+        combos = set()
+        for table in self.KEYS.values():
+            combos.update(table)
+        for key, alt in combos:
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, k=key, a=alt: self.shortcut(k, a), id=ident)
+            accel.append((wx.ACCEL_ALT if alt else wx.ACCEL_NORMAL, key, ident))
+        self.SetAcceleratorTable(wx.AcceleratorTable(accel))
         self.list.SetFocus()
+
+    def shortcut(self, key, alt):
+        row = self.current()
+        if not row:
+            return
+        verbs = self.KEYS.get(row["kind"], {}).get((key, alt))
+        if verbs:
+            self.pick(("verbs", verbs, row))
 
     def current(self):
         i = self.list.GetSelection()
