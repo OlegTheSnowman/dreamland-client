@@ -533,7 +533,14 @@ class MainFrame(wx.Frame):
             lines[-1].text, lines[-1].links = "", []
         self.prompt_due = False
         if self.capture is not None:
-            self.capture["lines"].extend(lines)
+            paged = [l for l in lines if textlists.is_pager(l.text)]
+            self.capture["lines"].extend(l for l in lines if not textlists.is_pager(l.text))
+            if paged:
+                if self.capture.get("timer"):
+                    self.capture["timer"].Stop()
+                self.capture["timer"] = wx.CallLater(3000, self.finish_capture)
+                self.conn.send_line("")
+                return
             if not complete:
                 self.finish_capture()
             return
@@ -1457,20 +1464,32 @@ class MainFrame(wx.Frame):
             ("questshop", "quest|list квест|список"),
             ("questrequest", "quest|request квест|попросить квест|попросити"),
             ("zonequests", "quest квест"),
-            ("areas", "areas зоны зони")):
+            ("areas", "areas зоны зони"),
+            ("notes", "note|list news|list change|list idea|list story|list qnote|list"),
+            ("helpmatches", "help справка довідка"),
+            ("glist", "glist"),
+            ("socials", "socials социалы соціали"),
+            ("commands", "commands команды команди"),
+            ("linked", "vault хранилище сховище where где де craft")):
         for _w in _words.split():
             TYPED[_w.replace("|", " ")] = _kind
 
-    TYPED_WITH_ARGS = {"skilltable", "shop", "who", "areas"}
+    TYPED_WITH_ARGS = {"skilltable", "shop", "who", "areas", "helpmatches", "glist", "equipment"}
 
     def typed_list(self, text):
         if not self.prefs.get("list_menus", True) or not self.conn.in_world or self.capture or self.items_dlg:
             return False
         words = text.lower().split()
         kind = self.TYPED.get(" ".join(words))
-        command = None
-        if not kind and len(words) > 1 and self.TYPED.get(words[0]) in self.TYPED_WITH_ARGS:
-            kind, command = self.TYPED[words[0]], " ".join(text.split())
+        command = " ".join(text.split())
+        if not kind and len(words) > 1:
+            first = self.TYPED.get(words[0])
+            if first in self.TYPED_WITH_ARGS:
+                kind = first
+            elif first == "linked" and words[0] in ("vault", "хранилище", "сховище", "where", "где", "де"):
+                kind = first
+            elif words[0] == "craft" and words[1] in ("filter", "list"):
+                kind = "linked"
         if not kind:
             return False
         self.open_items(kind, command)
@@ -1509,9 +1528,13 @@ class MainFrame(wx.Frame):
         compare = self.tr("items.compare")
         if cap["kind"] in textlists.PARSERS:
             _cmd, parser, _title, keys_key = textlists.PARSERS[cap["kind"]]
-            rows = parser(cap["lines"], self.tr)
+            rows = parser(cap["lines"], self.tr, cap.get("command") or "")
             keys_text = self.tr(keys_key)
         for line in (cap["lines"] if cap["kind"] not in textlists.PARSERS else []):
+            if cap["kind"] == "equipment" and not any(l.menu for l in line.links) and line.text.rstrip().endswith("nothing."):
+                rows.append({"label": " ".join(line.text.split()), "kind": "custom", "menu": [], "keys": {},
+                             "refresh": set()})
+                continue
             for link in line.links:
                 if not link.menu:
                     continue
@@ -1549,6 +1572,14 @@ class MainFrame(wx.Frame):
         how, what, row = choice
         if row.get("kind") == "custom":
             cmds = what if how == "commands" else [what]
+            if row.get("open") and cmds == [row["open"][1]]:
+                return self.open_items(row["open"][0], row["open"][1])
+            if cmds and cmds[0].startswith("__target__ "):
+                if self.items_dlg:
+                    self.items_dlg.EndModal(wx.ID_OK)
+                self.input.ChangeValue(cmds[0].split(" ", 1)[1] + " ")
+                self.input.SetInsertionPointEnd()
+                return wx.CallAfter(self.say, self.tr("tl.typetarget"))
             if row.get("close") and self.items_dlg:
                 self.items_dlg.EndModal(wx.ID_OK)
             for cmd in cmds:
