@@ -542,6 +542,8 @@ class MainFrame(wx.Frame):
                 self.conn.send_line("")
                 return
             if not complete:
+                if self.capture["kind"] == "__text__" and self.capture["lines"]:
+                    self.capture["lines"].pop()
                 self.finish_capture()
             return
         starts = self.append_lines(lines, complete)
@@ -1515,6 +1517,13 @@ class MainFrame(wx.Frame):
                         "timer": wx.CallLater(3000, self.finish_capture)}
         self.send_command(command, echo=False)
 
+    def show_help(self, command):
+        if self.capture and self.capture.get("timer"):
+            self.capture["timer"].Stop()
+        self.capture = {"kind": "__text__", "title": command.split(" ", 1)[1].strip(), "lines": [],
+                        "command": command, "timer": wx.CallLater(3000, self.finish_capture)}
+        self.send_command(command, echo=False)
+
     REFRESH_VERBS = {"drop", "sacrifice", "wear", "remove", "get", "kill"}
 
     def finish_capture(self):
@@ -1523,6 +1532,12 @@ class MainFrame(wx.Frame):
             return
         if cap.get("timer"):
             cap["timer"].Stop()
+        if cap["kind"] == "__text__":
+            text = "\n".join(line.text.rstrip() for line in cap["lines"]).strip()
+            dlg = TextDialog(self.items_dlg or self, cap["title"], text or self.tr("items.none"), self.tr("ok"))
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
         rows = []
         keys_text = None
         compare = self.tr("items.compare")
@@ -1580,6 +1595,9 @@ class MainFrame(wx.Frame):
                 self.input.ChangeValue(cmds[0].split(" ", 1)[1] + " ")
                 self.input.SetInsertionPointEnd()
                 return wx.CallAfter(self.say, self.tr("tl.typetarget"))
+            helps = [c for c in cmds if c.lower().startswith("help ")]
+            if helps and self.items_dlg:
+                return self.show_help(helps[0])
             if row.get("close") and self.items_dlg:
                 self.items_dlg.EndModal(wx.ID_OK)
             for cmd in cmds:
