@@ -1088,10 +1088,17 @@ class MainFrame(wx.Frame):
             return self.say(self.tr("rooms.nowhere"))
         self.say(self.tr("rooms.loading"))
         lang = self.tr.lang
+        try:
+            here = int(self.prompt.get("vnum"))
+        except (TypeError, ValueError):
+            here = None
 
         def load():
             try:
-                rooms = fetch_rooms(area, lang)
+                amap = AreaMap(fetch_graph(area), lang)
+                dist = amap.steps_from(here)
+                rooms = sorted(((v, r["name"], dist.get(v)) for v, r in amap.rooms.items() if r["name"]),
+                               key=lambda r: (r[1].lower(), r[0]))
             except NoMap:
                 rooms = None
             except Exception:

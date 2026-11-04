@@ -887,8 +887,16 @@ class RoomsDialog(wx.Dialog):
     def fill(self):
         q = self.search.GetValue().strip().lower()
         self.shown = [r for r in self.rooms if q in r[1].lower()] if q else list(self.rooms)
-        self.list.Set([name for _, name in self.shown] or [self.tr("rooms.none")])
+        self.list.Set([self.room_label(r) for r in self.shown] or [self.tr("rooms.none")])
         self.list.SetSelection(0)
+
+    def room_label(self, r):
+        steps = r[2] if len(r) > 2 else None
+        if steps == 0:
+            return "%s, %s" % (r[1], self.tr("map.here"))
+        if steps:
+            return "%s, %s" % (r[1], self.tr("map.step1") if steps == 1 else self.tr("map.steps", steps))
+        return r[1]
 
     def on_search_key(self, event):
         if event.GetKeyCode() == wx.WXK_DOWN and self.shown:
@@ -995,7 +1003,7 @@ class FindDialog(wx.Dialog):
 class AreasDialog(wx.Dialog):
     WALK, ROUTE, HELP = 201, 202, 203
 
-    SORTS = ("name", "level", "levelhigh")
+    SORTS = ("name", "level", "levelhigh", "near")
 
     def __init__(self, parent, tr, areas, sort="name"):
         super().__init__(parent, title=tr("areas.title"), size=wx.Size(640, 560),
@@ -1004,7 +1012,7 @@ class AreasDialog(wx.Dialog):
         s = wx.BoxSizer(wx.VERTICAL)
         self.search = labelled(self, s, tr("areas.search"), wx.TextCtrl(self))
         self.sort = labelled(self, s, tr("areas.sort"), wx.Choice(
-            self, choices=[tr("areas.byname"), tr("areas.bylevel"), tr("areas.bylevelhigh")]))
+            self, choices=[tr("areas.byname"), tr("areas.bylevel"), tr("areas.bylevelhigh"), tr("areas.bynear")]))
         self.sort.SetSelection(self.SORTS.index(sort) if sort in self.SORTS else 0)
         self.sort.Bind(wx.EVT_CHOICE, lambda e: self.fill())
         self.list = labelled(self, s, tr("areas.list"), wx.ListBox(self), expand="grow")
@@ -1029,6 +1037,8 @@ class AreasDialog(wx.Dialog):
         text = self.tr("areas.row", a["name"], a["min"], a["max"]) if a["levels"] and a["max"] else a["name"]
         if a.get("danger"):
             text += ", " + self.tr("areas.danger." + a["danger"])
+        if a.get("steps"):
+            text += ", " + self.tr("areas.steps", a["steps"])
         return text
 
     def fill(self):
@@ -1044,6 +1054,8 @@ class AreasDialog(wx.Dialog):
         order = self.sort_key()
         if order == "level":
             self.shown.sort(key=lambda a: (not a["levels"], a["min"], a["max"], a["name"].lower()))
+        elif order == "near":
+            self.shown.sort(key=lambda a: (a.get("steps") is None, a.get("steps") or 0, a["name"].lower()))
         elif order == "levelhigh":
             self.shown.sort(key=lambda a: (not a["levels"], -a["min"], -a["max"], a["name"].lower()))
         else:

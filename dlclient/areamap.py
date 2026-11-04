@@ -41,6 +41,13 @@ MIDGAARD = "midgaard"
 DANGER = ("safe", "easy", "hard", "deadly")
 
 
+def route_steps(route):
+    total = 0
+    for count, letter in re.findall(r"(\d*)([neswudNESWUD])", route or ""):
+        total += int(count) if count else 1
+    return total
+
+
 def _get_json(url, limit, timeout):
     req = urllib.request.Request(url, headers={"User-Agent": "DreamLand desktop client"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -79,6 +86,7 @@ def fetch_areas(lang, timeout=15):
             "max": int(e.get("levelHigh") or 0),
             "levels": bool(e.get("levelHigh")),
             "route": sw if ROUTE.fullmatch(sw) else None,
+            "steps": route_steps(sw) if ROUTE.fullmatch(sw) else None,
             "note": clean(e.get("speedwalk" + suffix)) or sw,
             "danger": next((d for d in DANGER if d in flags), ""),
         })

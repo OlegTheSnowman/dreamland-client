@@ -1,5 +1,7 @@
 EXTRA = {
     "en": {
+        'areas.bynear': 'Distance from the Market Square',
+        'areas.steps': '%d steps from the Market Square',
         'map.step1': '1 step',
         'compass.n': 'north',
         'compass.s': 'south',
@@ -135,6 +137,8 @@ EXTRA = {
         ),
     },
     "ua": {
+        'areas.bynear': 'Відстанню від Ринкової площі',
+        'areas.steps': 'кроків від Ринкової площі: %d',
         'map.step1': '1 крок',
         'compass.n': 'на північ',
         'compass.s': 'на південь',
@@ -270,6 +274,8 @@ EXTRA = {
         ),
     },
     "ru": {
+        'areas.bynear': 'Расстоянию от Рыночной площади',
+        'areas.steps': 'шагов от Рыночной площади: %d',
         'map.step1': '1 шаг',
         'compass.n': 'на север',
         'compass.s': 'на юг',
