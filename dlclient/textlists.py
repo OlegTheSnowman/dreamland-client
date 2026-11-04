@@ -98,8 +98,8 @@ def quest_shop(lines, tr):
         text = line.text.strip()
         m = QSHOP_ROW.match(text)
         if m:
-            n, name, cost = m.group(1), m.group(2), m.group(4)
-            label = "%s. %s, %s" % (n, name, cost) + (" (%s)" % section if section else "")
+            n, name, word, cost = m.group(1), m.group(2), m.group(3), m.group(4)
+            label = "%s. %s, %s, %s" % (n, name, tr("tl.word", word), cost) + (" (%s)" % section if section else "")
             rows.append({"label": label, "kind": "custom", "menu": [(tr("tl.buy"), "quest buy " + n)],
                          "keys": {(ord("B"), True): ["quest buy " + n]}, "refresh": {"quest buy " + n}})
         elif text and not re.match(r"^(You |To buy|List of|.*asks? .* show)", text) and ":" not in text:
