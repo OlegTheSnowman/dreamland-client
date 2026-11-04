@@ -12,6 +12,7 @@ RECONNECT_MAX = 15
 
 class Connection:
     def __init__(self, on_frame, on_state):
+        self.url = URL
         self.on_frame = on_frame
         self.on_state = on_state
         self.ws = None
@@ -69,7 +70,7 @@ class Connection:
             self.in_world = False
             self.on_state("connecting" if not self.resume_token else "reconnecting", None)
             self.ws = websocket.WebSocketApp(
-                URL,
+                self.url or URL,
                 subprotocols=["binary"],
                 header={"User-Agent": "DreamLand desktop client"},
                 on_open=self._on_open,

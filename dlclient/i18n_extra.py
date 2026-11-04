@@ -1,5 +1,9 @@
 EXTRA = {
     "en": {
+        'menu.server': 'Game &server...',
+        'server.title': 'Game server',
+        'server.label': 'Address of the game server. Leave %s for the real game; a local test server is usually ws://localhost:1234.',
+        'server.set': 'Server set to %s. It is used from the next connection.',
         'menu.tones': 'Exit &tones when you move',
         'tones.on': "Exit tones on: each move plays the room's exits, north high, south low, east and west in each ear, up and down as slides.",
         'tones.off': 'Exit tones off.',
@@ -225,6 +229,10 @@ EXTRA = {
         ),
     },
     "ua": {
+        'menu.server': '&Сервер гри...',
+        'server.title': 'Сервер гри',
+        'server.label': 'Адреса сервера гри. Залиш %s для справжньої гри; локальний тестовий сервер зазвичай ws://localhost:1234.',
+        'server.set': 'Сервер: %s. Він діятиме з наступного підключення.',
         'menu.tones': '&Тони виходів під час руху',
         'tones.on': 'Тони виходів увімкнено: кожен крок грає виходи кімнати, північ високо, південь низько, схід і захід у кожному вусі, вгору і вниз ковзанням.',
         'tones.off': 'Тони виходів вимкнено.',
@@ -450,6 +458,10 @@ EXTRA = {
         ),
     },
     "ru": {
+        'menu.server': '&Сервер игры...',
+        'server.title': 'Сервер игры',
+        'server.label': 'Адрес сервера игры. Оставь %s для настоящей игры; локальный тестовый сервер обычно ws://localhost:1234.',
+        'server.set': 'Сервер: %s. Он будет использован со следующего подключения.',
         'menu.tones': '&Тоны выходов при движении',
         'tones.on': 'Тоны выходов включены: каждый шаг играет выходы комнаты, север высоко, юг низко, восток и запад в каждом ухе, вверх и вниз скольжением.',
         'tones.off': 'Тоны выходов выключены.',

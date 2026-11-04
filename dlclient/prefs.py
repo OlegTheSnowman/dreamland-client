@@ -20,6 +20,7 @@ DEFAULTS = {
     "log_session": False,
     "check_updates": True,
     "exit_tones": True,
+    "server": "",
     "history": [],
     "vars": {},
 }

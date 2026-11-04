@@ -90,6 +90,8 @@ class MainFrame(wx.Frame):
         self.link_font = None
         self.telnet = Telnet()
         self.conn = Connection(self._frame_from_thread, self._state_from_thread)
+        if self.prefs.get("server"):
+            self.conn.url = self.prefs["server"]
         later = lambda secs, fn: wx.CallLater(int(secs * 1000), fn)
         self.triggers = Triggers(self.conn.rpc, later)
         self.macros = Macros(self.conn.rpc, later)
@@ -205,6 +207,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.connect"), lambda e: self.connect())
         self._item(game, tr("menu.disconnect"), lambda e: self.conn.disconnect())
         self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
+        self._item(game, tr("menu.server"), lambda e: self.choose_server())
         self._item(game, tr("menu.account"), lambda e: self.open_account())
         game.AppendSeparator()
         self._item(game, tr("menu.links"), lambda e: self.show_links())
@@ -1358,6 +1361,20 @@ class MainFrame(wx.Frame):
         self.prefs["exit_tones"] = not self.prefs.get("exit_tones", True)
         self.tones_item.Check(self.prefs["exit_tones"])
         self.say(self.tr("tones.on" if self.prefs["exit_tones"] else "tones.off"))
+
+    def choose_server(self):
+        from .connection import URL
+        dlg = wx.TextEntryDialog(self, self.tr("server.label", URL), self.tr("server.title"),
+                                 self.prefs.get("server") or URL)
+        if dlg.ShowModal() == wx.ID_OK:
+            value = dlg.GetValue().strip()
+            if value and not value.startswith(("ws://", "wss://")):
+                value = "ws://" + value
+            self.prefs["server"] = "" if value in ("", URL) else value
+            self.conn.url = self.prefs["server"] or URL
+            self.say(self.tr("server.set", self.conn.url))
+        dlg.Destroy()
+        self.input.SetFocus()
 
     def read_panel(self, key):
         fn = dict(status_mod.PANELS)[key]
