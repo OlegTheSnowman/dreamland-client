@@ -1391,13 +1391,8 @@ class MainFrame(wx.Frame):
         wanted = self.prefs.get("room_sounds") or {}
         present = classify(seen)
         kinds = [k for k in self.ROOM_SOUND_ORDER if k in present and wanted.get(k, True)]
-        at = max(0, int((due - time.time()) * 1000))
         for j, kind in enumerate(kinds):
-            delay = at + 160 * j
-            if delay > 0:
-                wx.CallLater(delay, self.sound.exit_tone, kind, first + j, "room")
-            else:
-                self.sound.exit_tone(kind, first + j, "room")
+            self.sound.exit_tone(kind, j, "room")
 
     def toggle_room_sound(self, kind, on):
         self.prefs.setdefault("room_sounds", {})[kind] = on

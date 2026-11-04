@@ -40,7 +40,7 @@ class SoundPlayer:
         if pygame:
             try:
                 pygame.mixer.init()
-                pygame.mixer.set_num_channels(12)
+                pygame.mixer.set_num_channels(14)
                 self.effect_channel = pygame.mixer.Channel(0)
                 self.music_channel = pygame.mixer.Channel(1)
                 self.preview_channel = pygame.mixer.Channel(2)
@@ -180,7 +180,7 @@ class SoundPlayer:
         snd = self.cache.get(key)
         if not snd:
             return
-        channel = pygame.mixer.Channel(4 + index % 6)
+        channel = pygame.mixer.Channel(10 + index % 4 if folder == "room" else 4 + index % 6)
         channel.set_volume(self.gain("ui", 70))
         channel.play(snd)
 
