@@ -5,12 +5,6 @@ REVERSE = {"north": "south", "south": "north", "east": "west", "west": "east", "
 DELTA = {"north": (0, 1), "south": (0, -1), "east": (1, 0), "west": (-1, 0)}
 DIR_ORDER = ["north", "east", "south", "west", "up", "down"]
 
-SECTOR_COLOUR = {
-    "inside": "#d9b94a", "city": "#ffffff", "field": "#8ee34f", "forest": "#6cba2e", "hills": "#c4a000",
-    "mountain": "#a7aaa3", "water_swim": "#55a3f2", "water_noswim": "#4a86d8", "underwater": "#5a90d0",
-    "air": "#7fc0ff", "desert": "#fdea56", "cave": "#a7aaa3", "jungle": "#45c9b0", "tundra": "#e6e9e1",
-    "unknown": "#a7aaa3",
-}
 
 
 def _name(room, lang):
@@ -132,50 +126,4 @@ class AreaMap:
 
     def area_name(self, key):
         return self.area_names.get(key) or key
-
-
-def describe(amap, vnum, here, tr):
-    r = amap.rooms[vnum]
-    key = "map.sector." + r["sector"]
-    sector = tr(key)
-    parts = [r["name"] or str(vnum), r["sector"] if sector == key else sector]
-    if vnum == here:
-        parts.append(tr("map.here"))
-    else:
-        off = amap.offset(vnum, here)
-        if off:
-            dx, dy, dz = off
-            pieces = []
-            if dx or dy:
-                ns = "n" if dy > 0 else "s"
-                ew = "e" if dx > 0 else "w"
-                if abs(dx) * 2 < abs(dy):
-                    compass = ns
-                elif abs(dy) * 2 < abs(dx):
-                    compass = ew
-                else:
-                    compass = ns + ew
-                pieces.append(tr("map.where", tr("compass." + compass)))
-            if dz:
-                pieces.append(tr("map.u" if dz > 0 else "map.d", abs(dz)))
-            steps = amap.steps_from(here).get(vnum) if here is not None else None
-            if steps:
-                pieces.append(tr("map.step1") if steps == 1 else tr("map.steps", steps))
-            if pieces:
-                parts.append(", ".join(pieces))
-    exits = []
-    for ex in r["exits"]:
-        d = tr("dir." + ex["dir"])
-        if ex["style"] == "cross_area":
-            exits.append(tr("map.leads", d, amap.area_name(ex["area"])) if ex["area"] else d)
-        elif ex["style"] in ("door_closed", "door_locked", "door_pickproof", "warp", "random"):
-            exits.append("%s %s" % (d, tr("map.exit." + ex["style"])))
-        else:
-            exits.append(d)
-    parts.append(tr("map.exits", ", ".join(exits)) if exits else tr("map.noexits"))
-    return ". ".join(p for p in parts if p) + "."
-
-
-def colour_for(sector):
-    return SECTOR_COLOUR.get(sector, SECTOR_COLOUR["unknown"])
 
