@@ -4,6 +4,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dlclient.areamap import route_steps, split_route
 from dlclient.mapview import AreaMap
 
 GRAPH = {
@@ -43,6 +44,15 @@ class MapTest(unittest.TestCase):
 
     def test_steps(self):
         self.assertEqual(self.m.steps_from(1), {1: 0, 2: 1, 3: 1, 4: 2})
+
+
+class RouteTest(unittest.TestCase):
+    def test_split(self):
+        self.assertEqual(split_route("3nu"), ("3nu", ""))
+        self.assertEqual(split_route("s6sese or by metro"), ("s6sese", "or by metro"))
+        self.assertEqual(split_route("s13w, enter tree"), ("s13w", "enter tree"))
+        self.assertEqual(split_route("use the portal"), (None, "use the portal"))
+        self.assertEqual(route_steps("s6sese"), 10)
 
 
 if __name__ == "__main__":
