@@ -23,6 +23,29 @@ web client does:
   the keypad movement, the script's commands and its triggers.
 - English, Ukrainian and Russian for both the menus and the game.
 
+It also has a few things of its own:
+
+- The game's colours, in a dark theme like the web client's, a light theme or
+  the system colours, with any font and size (Ctrl+= and Ctrl+- change the
+  size).
+- Search in the output (Ctrl+F, then Ctrl+G for older matches and Ctrl+Shift+G
+  for newer ones).
+- Chat buffers per channel, read with Alt and the arrow keys.
+- A speech filter for lines you don't want spoken, logging the session to a
+  text file, and commas between exits.
+- Auto login, with the password kept in Windows Credential Manager.
+- Updates from GitHub releases, checked at start.
+
+Press F1 in the client for every keyboard shortcut.
+
+## Download
+
+Get the zip from the
+[latest release](https://github.com/OlegTheSnowman/dreamland-client/releases/latest),
+unpack it anywhere and run DreamLand.exe. Nothing needs installing. The client
+checks for a new release when it starts and offers to install it; Help, Check
+for updates does the same by hand.
+
 ## Running from source
 
 ```
@@ -31,7 +54,15 @@ pythonw dreamland.pyw
 ```
 
 Settings, command history and variables are saved in
-%APPDATA%\DreamLandClient\settings.json.
+%APPDATA%\DreamLandClient\settings.json, chat history in the chat folder next
+to it, session logs in logs, and errors in error.log.
+
+To build the release folder and zip into dist:
+
+```
+pip install pyinstaller
+python build.py
+```
 
 ## Tests
 
