@@ -1125,8 +1125,9 @@ class MainFrame(wx.Frame):
     def _areas_loaded(self, areas):
         if not areas:
             return self.say(self.tr("areas.offline"))
-        dlg = dialogs.AreasDialog(self, self.tr, areas)
+        dlg = dialogs.AreasDialog(self, self.tr, areas, self.prefs.get("areas_sort", "name"))
         choice = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
+        self.prefs["areas_sort"] = dlg.sort_key()
         dlg.Destroy()
         self.input.SetFocus()
         if not choice:

@@ -995,12 +995,18 @@ class FindDialog(wx.Dialog):
 class AreasDialog(wx.Dialog):
     WALK, ROUTE, HELP = 201, 202, 203
 
-    def __init__(self, parent, tr, areas):
-        super().__init__(parent, title=tr("areas.title"), size=wx.Size(640, 540),
+    SORTS = ("name", "level", "levelhigh")
+
+    def __init__(self, parent, tr, areas, sort="name"):
+        super().__init__(parent, title=tr("areas.title"), size=wx.Size(640, 560),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.tr, self.areas, self.shown = tr, areas, list(areas)
         s = wx.BoxSizer(wx.VERTICAL)
         self.search = labelled(self, s, tr("areas.search"), wx.TextCtrl(self))
+        self.sort = labelled(self, s, tr("areas.sort"), wx.Choice(
+            self, choices=[tr("areas.byname"), tr("areas.bylevel"), tr("areas.bylevelhigh")]))
+        self.sort.SetSelection(self.SORTS.index(sort) if sort in self.SORTS else 0)
+        self.sort.Bind(wx.EVT_CHOICE, lambda e: self.fill())
         self.list = labelled(self, s, tr("areas.list"), wx.ListBox(self), expand="grow")
         row = wx.BoxSizer(wx.HORIZONTAL)
         buttons = [wx.Button(self, self.WALK, tr("rooms.walk")), wx.Button(self, self.ROUTE, tr("rooms.route")),
@@ -1034,8 +1040,19 @@ class AreasDialog(wx.Dialog):
                           or q in a["ru"].lower()]
         else:
             self.shown = list(self.areas)
+        order = self.sort_key()
+        if order == "level":
+            self.shown.sort(key=lambda a: (not a["levels"], a["min"], a["max"], a["name"].lower()))
+        elif order == "levelhigh":
+            self.shown.sort(key=lambda a: (not a["levels"], -a["min"], -a["max"], a["name"].lower()))
+        else:
+            self.shown.sort(key=lambda a: a["name"].lower())
         self.list.Set([self.label(a) for a in self.shown] or [self.tr("rooms.none")])
         self.list.SetSelection(0)
+
+    def sort_key(self):
+        i = self.sort.GetSelection()
+        return self.SORTS[i] if 0 <= i < len(self.SORTS) else "name"
 
     def on_search_key(self, event):
         if event.GetKeyCode() == wx.WXK_DOWN and self.shown:
