@@ -1,5 +1,6 @@
 EXTRA = {
     "en": {
+        'tl.notyet': '%s, not available yet',
         'tl.word': 'word %s',
         'tl.questshop': 'Quest shop',
         'tl.questrequest': 'Quest tasks',
@@ -289,6 +290,7 @@ EXTRA = {
         ),
     },
     "ua": {
+        'tl.notyet': '%s, ще недоступне',
         'tl.word': 'слово %s',
         'tl.questshop': 'Крамниця квестора',
         'tl.questrequest': 'Завдання квестора',
@@ -578,6 +580,7 @@ EXTRA = {
         ),
     },
     "ru": {
+        'tl.notyet': '%s, пока недоступно',
         'tl.word': 'слово %s',
         'tl.questshop': 'Магазин квестора',
         'tl.questrequest': 'Задания квестора',

@@ -69,11 +69,14 @@ def skills(lines, tr):
         for i in range(1, len(cells) - 2, 3):
             name, learned, cost = cells[i], cells[i + 1], cells[i + 2]
             m = LEARNED.search(learned)
-            if not name or not m:
+            if not name or not (m or learned.lower() == "n/a"):
                 continue
-            label = tr("tl.skill", name, m.group(1))
-            if m.group(2) != m.group(1):
-                label += " " + tr("tl.bonus", m.group(2))
+            if m:
+                label = tr("tl.skill", name, m.group(1))
+                if m.group(2) != m.group(1):
+                    label += " " + tr("tl.bonus", m.group(2))
+            else:
+                label = tr("tl.notyet", name)
             if level:
                 label += ", " + tr("tl.level", level)
             if cost:

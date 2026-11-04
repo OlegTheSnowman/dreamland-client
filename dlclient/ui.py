@@ -1461,13 +1461,19 @@ class MainFrame(wx.Frame):
         for _w in _words.split():
             TYPED[_w.replace("|", " ")] = _kind
 
+    TYPED_WITH_ARGS = {"skilltable", "shop", "who", "areas"}
+
     def typed_list(self, text):
         if not self.prefs.get("list_menus", True) or not self.conn.in_world or self.capture or self.items_dlg:
             return False
-        kind = self.TYPED.get(" ".join(text.lower().split()))
+        words = text.lower().split()
+        kind = self.TYPED.get(" ".join(words))
+        command = None
+        if not kind and len(words) > 1 and self.TYPED.get(words[0]) in self.TYPED_WITH_ARGS:
+            kind, command = self.TYPED[words[0]], " ".join(text.split())
         if not kind:
             return False
-        self.open_items(kind)
+        self.open_items(kind, command)
         return True
 
     LISTS = {"inventory": ("inventory", "items.inventory"), "equipment": ("equipment", "items.equipment"),
@@ -1477,14 +1483,16 @@ class MainFrame(wx.Frame):
         if not self.conn.in_world:
             return self.say(self.tr("rooms.nowhere"))
         if kind in self.LISTS:
-            command, key = self.LISTS[kind]
+            default, key = self.LISTS[kind]
+            command = command or default
             title = self.tr(key)
         elif kind in textlists.PARSERS:
-            command, _parser, key, _keys = textlists.PARSERS[kind]
+            default, _parser, key, _keys = textlists.PARSERS[kind]
+            command = command or default
             title = self.tr(key)
         if self.capture and self.capture.get("timer"):
             self.capture["timer"].Stop()
-        self.capture = {"kind": kind, "title": title, "container": container, "lines": [],
+        self.capture = {"kind": kind, "title": title, "container": container, "lines": [], "command": command,
                         "timer": wx.CallLater(3000, self.finish_capture)}
         self.send_command(command, echo=False)
 
@@ -1570,15 +1578,16 @@ class MainFrame(wx.Frame):
         view = self.items_view
         if not view or not self.items_dlg:
             return
-        command = {"inventory": "inventory", "equipment": "equipment", "room": "look", "who": "who"}.get(view["kind"])
+        command = view.get("command") or {"inventory": "inventory", "equipment": "equipment", "room": "look",
+                                          "who": "who"}.get(view["kind"])
         if view["kind"] in textlists.PARSERS:
-            command = textlists.PARSERS[view["kind"]][0]
+            command = view.get("command") or textlists.PARSERS[view["kind"]][0]
         if view["kind"] == "container":
             command = "look in " + view["container"]
         if not command:
             return
         self.capture = {"kind": view["kind"], "title": view["title"], "container": view.get("container"),
-                        "lines": [], "timer": wx.CallLater(3000, self.finish_capture)}
+                        "lines": [], "command": view.get("command"), "timer": wx.CallLater(3000, self.finish_capture)}
         self.send_command(command, echo=False)
 
     def item_verbs(self, verbs, row):
