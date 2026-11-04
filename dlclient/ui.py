@@ -23,6 +23,7 @@ from . import status as status_mod
 from .scripting import new_id
 from .presence import classify, kind_of
 from . import textlists
+from . import framelists
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -444,6 +445,9 @@ class MainFrame(wx.Frame):
             if args and args[0] != PROTO_VERSION:
                 self.notice(self.tr("state.version", PROTO_VERSION, args[0]), speak=False)
             self.parser.nonce = args[1] if len(args) > 1 else None
+        elif command == "list" and args and isinstance(args[0], dict):
+            if self.capture is not None:
+                self.capture["frame"] = args[0]
         elif command == "msp":
             self.parser.msp_enabled = bool(args and args[0])
             if not self.parser.msp_enabled:
@@ -1560,11 +1564,16 @@ class MainFrame(wx.Frame):
         rows = []
         keys_text = None
         compare = self.tr("items.compare")
-        if cap["kind"] in textlists.PARSERS:
+        frame = cap.get("frame")
+        if frame is not None:
+            rows = framelists.rows_from_frame(frame, self.tr, cap["kind"])
+            if cap["kind"] in textlists.PARSERS:
+                keys_text = self.tr(textlists.PARSERS[cap["kind"]][3])
+        elif cap["kind"] in textlists.PARSERS:
             _cmd, parser, _title, keys_key = textlists.PARSERS[cap["kind"]]
             rows = parser(cap["lines"], self.tr, cap.get("command") or "")
             keys_text = self.tr(keys_key)
-        for line in (cap["lines"] if cap["kind"] not in textlists.PARSERS else []):
+        for line in (cap["lines"] if cap["kind"] not in textlists.PARSERS and frame is None else []):
             if cap["kind"] == "equipment" and not any(l.menu for l in line.links) and line.text.rstrip().endswith("nothing."):
                 rows.append({"label": " ".join(line.text.split()), "kind": "custom", "menu": [], "keys": {},
                              "refresh": set()})
@@ -1608,12 +1617,13 @@ class MainFrame(wx.Frame):
             cmds = what if how == "commands" else [what]
             if row.get("open") and cmds == [row["open"][1]]:
                 return self.open_items(row["open"][0], row["open"][1])
-            if cmds and cmds[0].startswith("__target__ "):
+            if cmds and cmds[0].startswith(("__target__ ", "__input__ ")):
                 if self.items_dlg:
                     self.items_dlg.EndModal(wx.ID_OK)
                 self.input.ChangeValue(cmds[0].split(" ", 1)[1] + " ")
                 self.input.SetInsertionPointEnd()
-                return wx.CallAfter(self.say, self.tr("tl.typetarget"))
+                hint = "tl.typetarget" if cmds[0].startswith("__target__ ") else "tl.typemessage"
+                return wx.CallAfter(self.say, self.tr(hint))
             if len(cmds) == 1 and self.is_info(cmds[0]) and self.items_dlg:
                 return self.show_help(cmds[0], row.get("label"))
             if row.get("close") and self.items_dlg:
