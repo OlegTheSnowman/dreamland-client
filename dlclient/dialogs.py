@@ -1470,7 +1470,7 @@ class ItemsDialog(wx.Dialog):
         combos = set()
         for table in self.KEYS.values():
             combos.update(table)
-        combos.update({(ord("B"), True), (ord("P"), True), (ord("H"), True)})
+        combos.update({(ord(c), True) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
         for key, alt in combos:
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, k=key, a=alt: self.shortcut(k, a), id=ident)
@@ -1485,11 +1485,36 @@ class ItemsDialog(wx.Dialog):
         if row.get("keys") is not None:
             cmds = row["keys"].get((key, alt))
             if cmds:
-                self.pick(("commands", cmds, row))
-            return
-        verbs = self.KEYS.get(row["kind"], {}).get((key, alt))
-        if verbs:
-            self.pick(("verbs", verbs, row))
+                return self.pick(("commands", cmds, row))
+        else:
+            verbs = self.KEYS.get(row["kind"], {}).get((key, alt))
+            if verbs:
+                return self.pick(("verbs", verbs, row))
+        if alt:
+            cmd = self.dynamic(row).get(chr(key).upper())
+            if cmd:
+                self.pick(("command", cmd, row))
+
+    def fixed_letters(self, row):
+        table = row["keys"] if row.get("keys") is not None else self.KEYS.get(row["kind"], {})
+        return {chr(k).upper() for (k, alt) in table if alt and 32 < k < 128}
+
+    def dynamic(self, row):
+        if "_dyn" in row:
+            return row["_dyn"]
+        taken = self.fixed_letters(row)
+        out = {}
+        for entry in row.get("menu") or []:
+            if entry is None:
+                continue
+            label, cmd = entry
+            for ch in label.upper():
+                if "A" <= ch <= "Z" and ch not in taken:
+                    taken.add(ch)
+                    out[ch] = cmd
+                    break
+        row["_dyn"] = out
+        return out
 
     def current(self):
         i = self.list.GetSelection()
@@ -1513,11 +1538,14 @@ class ItemsDialog(wx.Dialog):
         if not row:
             return
         menu = wx.Menu()
+        keys = {cmd: letter for letter, cmd in self.dynamic(row).items()}
         for entry in row["menu"]:
             if entry is None:
                 menu.AppendSeparator()
                 continue
             text, cmd = entry
+            if cmd in keys:
+                text = "%s (Alt+%s)" % (text, keys[cmd])
             it = menu.Append(wx.ID_ANY, text)
             self.Bind(wx.EVT_MENU, lambda e, c=cmd: self.pick(("command", c, row)), it)
         self.PopupMenu(menu)
