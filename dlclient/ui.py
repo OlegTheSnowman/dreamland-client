@@ -24,6 +24,7 @@ from .scripting import new_id
 from .presence import classify, kind_of
 from . import textlists
 from . import framelists
+from . import sitedata
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -142,6 +143,8 @@ class MainFrame(wx.Frame):
         self.help_search = HelpSearch(prefs_mod.folder())
         self.autobuff_dlg = None
         self.account_wait = None
+        self.guide_dlg = None
+        self.guide_asked = False
         self.sound_fetching = set()
         self.completion = None
         self.prompt = {}
@@ -225,6 +228,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.chat"), lambda e: self.open_chat())
         self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
         self._item(game, tr("menu.areas"), lambda e: self.open_areas())
+        self._item(game, tr("menu.guide"), lambda e: self.open_guide())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
         panels = wx.Menu()
         self._item(panels, tr("menu.panel.all"), lambda e: self.show_panels())
@@ -466,6 +470,7 @@ class MainFrame(wx.Frame):
         elif command == "version":
             self.conn.rpc("chat_subscribe", 1)
             self.conn.rpc("list_subscribe")
+            self.refresh_site_data()
             self.auto_sent = set()
             self.nanny_password = False
             self.reset_lists()
@@ -1295,6 +1300,71 @@ class MainFrame(wx.Frame):
             wx.CallAfter(self._areas_loaded, areas)
         threading.Thread(target=load, daemon=True).start()
 
+    def refresh_site_data(self):
+        """Keep the guide's website data fresh; at most one download a day."""
+        lang = self.tr.lang
+        threading.Thread(target=lambda: sitedata.refresh(lang), daemon=True).start()
+
+    def guide_key(self):
+        return (getattr(self, "guide_name", None) or getattr(self, "login_name", None) or "").lower()
+
+    def guide_context(self):
+        return dict((self.prefs.get("guide") or {}).get(self.guide_key()) or {})
+
+    def save_guide_context(self, ctx):
+        key = self.guide_key()
+        if key:
+            store = dict(self.prefs.get("guide") or {})
+            store[key] = dict(ctx)
+            self.prefs["guide"] = store
+
+    def guide_char(self, data):
+        """account_chars reply: fill in the current character's level and class."""
+        current = str(data.get("current") or "")
+        char = next((c for c in data.get("chars") or [] if isinstance(c, dict)
+                     and str(c.get("name", "")).lower() == current.lower()), None)
+        if not char:
+            return
+        self.guide_name = current
+        ctx = self.guide_context()
+        if str(char.get("level") or "").isdigit():
+            ctx["level"] = int(char["level"])
+        cls = char.get("class")
+        if isinstance(cls, dict):
+            cls = cls.get("en") or ""
+        if cls:
+            ctx["class"] = str(cls)
+        self.save_guide_context(ctx)
+        if self.guide_dlg:
+            self.guide_dlg.set_context(ctx)
+
+    def open_guide(self):
+        if self.guide_dlg:
+            return
+        self.say(self.tr("guide.loading"))
+        lang = self.tr.lang
+        if self.conn.rpc("account_chars"):
+            self.guide_asked = True
+
+        def load():
+            sitedata.refresh(lang)
+            site = sitedata.Site.load(lang)
+            wx.CallAfter(self._guide_loaded, site)
+        threading.Thread(target=load, daemon=True).start()
+
+    def _guide_loaded(self, site):
+        if not site.ready():
+            return self.say(self.tr("guide.offline"))
+        from .guide import GuideDialog
+        dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context)
+        self.guide_dlg = dlg
+        try:
+            dlg.ShowModal()
+        finally:
+            self.guide_dlg = None
+            dlg.Destroy()
+        self.input.SetFocus()
+
     def _areas_loaded(self, areas):
         if not areas:
             return self.say(self.tr("areas.offline"))
@@ -1429,6 +1499,9 @@ class MainFrame(wx.Frame):
         self.account_wait = wx.CallLater(2500, lambda: self.say(self.tr("acc.noreply")))
 
     def on_account_chars(self, data):
+        if self.guide_asked:
+            self.guide_asked = False
+            self.guide_char(data)
         if not self.account_wait:
             return
         self.account_wait.Stop()
