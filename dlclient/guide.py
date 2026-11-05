@@ -158,7 +158,7 @@ class Page(wx.Panel):
         self.sizer.Add(self.extra, 0, wx.EXPAND)
         self.list = labelled(self, self.sizer, tr("guide.list"), wx.ListBox(self), expand="grow")
         self.detail = labelled(self, self.sizer, tr("guide.details"), wx.TextCtrl(
-            self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2, size=wx.Size(-1, 140)), expand="grow")
+            self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2, size=wx.Size(-1, 200)), expand="grow")
         if go:
             button = wx.Button(self, label=tr("guide.go"))
             self.sizer.Add(button, 0, wx.ALL, 4)
@@ -209,7 +209,7 @@ class Page(wx.Panel):
 
 class GuideDialog(wx.Dialog):
     def __init__(self, parent, tr, site, ctx, on_ctx=None, opts=None, on_opts=None):
-        super().__init__(parent, title=tr("guide.title"), size=wx.Size(760, 640),
+        super().__init__(parent, title=tr("guide.title"), size=wx.Size(860, 800),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.tr, self.site, self.on_ctx = tr, site, on_ctx
         self.opts, self.on_opts = dict(opts or {}), on_opts
