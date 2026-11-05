@@ -1,5 +1,6 @@
 import base64
 import datetime
+import json
 import os
 import re
 import threading
@@ -83,11 +84,17 @@ class MainFrame(wx.Frame):
     def __init__(self, app_dir):
         self.app_dir = app_dir
         self.prefs = prefs_mod.load()
+        self.prefs_saved = json.dumps(self.prefs, sort_keys=True, ensure_ascii=False)
         if os.environ.get("DLCLIENT_QUIET"):
             self.prefs["sound"]["mute"] = True
             self.prefs["speech"] = False
         self.tr = Tr(self.prefs.get("lang", "en"))
         super().__init__(None, title=self.tr("app.title"), size=(900, 700))
+        # Settings are written a few seconds after any change, not only on a clean
+        # exit, so a crash or a killed process does not lose them.
+        self.prefs_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, lambda e: self.save_prefs_if_changed(), self.prefs_timer)
+        self.prefs_timer.Start(3000)
 
         self.speech = Speech()
         live = os.path.join(prefs_mod.folder(), "sounds")
@@ -1340,11 +1347,22 @@ class MainFrame(wx.Frame):
         self.save_prefs_now()
 
     def save_prefs_now(self):
-        if not os.environ.get("DLCLIENT_QUIET"):
-            try:
-                prefs_mod.save(self.prefs)
-            except OSError:
-                pass
+        self.save_prefs_if_changed()
+
+    def save_prefs_if_changed(self):
+        if os.environ.get("DLCLIENT_QUIET"):
+            return
+        try:
+            now = json.dumps(self.prefs, sort_keys=True, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return
+        if now == self.prefs_saved:
+            return
+        try:
+            prefs_mod.save(self.prefs)
+            self.prefs_saved = now
+        except OSError:
+            pass
 
     def guide_char(self, data):
         """account_chars reply: fill in the current character's level and class."""
