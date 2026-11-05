@@ -225,6 +225,11 @@ class MainFrame(wx.Frame):
         ident = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, lambda e: self.fight_menu(), id=ident)
         accel.append((wx.ACCEL_ALT, ord("8"), ident))
+        from .guide import TABS as GUIDE_TABS
+        for name, letter in GUIDE_TABS:
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, n=name: self.open_guide(n), id=ident)
+            accel.append((wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord(letter), ident))
         for flags, key, fn in ((wx.ACCEL_CTRL, ord("="), lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, wx.WXK_NUMPAD_ADD, lambda: self.change_font(1)),
                                (wx.ACCEL_CTRL, ord("-"), lambda: self.change_font(-1)),
@@ -1386,7 +1391,7 @@ class MainFrame(wx.Frame):
                 self.guide_keep.char = self.guide_key()
             self.guide_keep.set_context(ctx)
 
-    def open_guide(self):
+    def open_guide(self, tab=None):
         if self.guide_dlg:
             return
         lang = self.tr.lang
@@ -1394,7 +1399,7 @@ class MainFrame(wx.Frame):
             self.guide_asked = True
         keep = self.guide_keep
         if keep and keep.lang == lang and keep.char == self.guide_key():
-            return self._guide_show(keep)
+            return self._guide_show(keep, tab=tab)
         if keep:
             keep.Destroy()
             self.guide_keep = None
@@ -1403,10 +1408,10 @@ class MainFrame(wx.Frame):
         def load():
             sitedata.refresh(lang)
             site = sitedata.Site.load(lang)
-            wx.CallAfter(self._guide_loaded, site)
+            wx.CallAfter(self._guide_loaded, site, tab)
         threading.Thread(target=load, daemon=True).start()
 
-    def _guide_loaded(self, site):
+    def _guide_loaded(self, site, tab=None):
         if not site.ready():
             return self.say(self.tr("guide.offline"))
         if self.guide_dlg or self.guide_keep:
@@ -1415,7 +1420,7 @@ class MainFrame(wx.Frame):
                           self.prefs.get("guide_opts") or {}, self.save_guide_opts)
         dlg.lang, dlg.char = self.tr.lang, self.guide_key()
         self.guide_keep = dlg
-        self._guide_show(dlg, first=True)
+        self._guide_show(dlg, first=True, tab=tab)
 
     def open_lookup(self):
         """Ctrl+K: find an item by name. Kept like the guide, so it reopens as it was left."""
@@ -1446,13 +1451,18 @@ class MainFrame(wx.Frame):
         self.lookup_keep = dlg
         self._guide_show(dlg, first=True)
 
-    def _guide_show(self, dlg, first=False):
+    def _guide_show(self, dlg, first=False, tab=None):
         """Show the guide; closing only hides it, so Ctrl+J reopens it as it was left."""
         self.guide_dlg = dlg
         try:
             if first:
                 dlg.choice = None
+                i = dlg.tab_index(tab) if tab and hasattr(dlg, "tab_index") else None
+                if i is not None:
+                    dlg.select_tab(i)
                 names = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
+            elif tab and hasattr(dlg, "tab_index"):
+                names = dlg.choice if dlg.show_again(tab) == wx.ID_OK else None
             else:
                 names = dlg.choice if dlg.show_again() == wx.ID_OK else None
         finally:

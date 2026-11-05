@@ -10,6 +10,8 @@ from . import sitedata as SD
 from .dialogs import labelled
 
 ALIGNS = ("", "good", "neutral", "evil")
+# Tab order in the guide, and the letter that opens each one with Alt+Shift.
+TABS = (("quests", "Q"), ("items", "I"), ("skills", "S"), ("gods", "G"), ("races", "R"))
 
 
 class NumberField(wx.TextCtrl):
@@ -241,20 +243,49 @@ class GuideDialog(wx.Dialog):
         self.book.SetSelection(0)
         self.last_focus = self.pages[0].search
         self.Bind(wx.EVT_CHILD_FOCUS, self.on_child_focus)
+        self.page_focus = {}
+        accel = []
+        for i, (_name, letter) in enumerate(TABS):
+            ident = wx.NewIdRef()
+            self.Bind(wx.EVT_MENU, lambda e, i=i: self.select_tab(i), id=ident)
+            accel.append((wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord(letter), ident))
+        self.SetAcceleratorTable(wx.AcceleratorTable(accel))
         self.pages[0].search.SetFocus()
 
     def on_child_focus(self, event):
         win = event.GetWindow()
         if win and win is not self:
             self.last_focus = win
+            for i, page in enumerate(self.pages):
+                w = win
+                while w and w is not page and w is not self:
+                    w = w.GetParent()
+                if w is page:
+                    self.page_focus[i] = win
         event.Skip()
 
-    def show_again(self):
+    def select_tab(self, i):
+        """Go to a tab and back to the control last used on it."""
+        if not 0 <= i < len(self.pages):
+            return
+        self.book.SetSelection(i)
+        target = self.page_focus.get(i) or self.pages[i].search
+        self.last_focus = target
+        wx.CallAfter(lambda: target and target.SetFocus())
+
+    def tab_index(self, name):
+        return next((i for i, (n, _l) in enumerate(TABS) if n == name), None)
+
+    def show_again(self, tab=None):
         """Open the kept window where it was left: same tab, filters and focus."""
         self.choice = None
-        target = self.last_focus
-        if target:
-            wx.CallAfter(lambda: target and target.SetFocus())
+        i = self.tab_index(tab) if tab else None
+        if i is not None:
+            self.select_tab(i)
+        else:
+            target = self.last_focus
+            if target:
+                wx.CallAfter(lambda: target and target.SetFocus())
         return self.ShowModal()
 
     # Character -----------------------------------------------------------

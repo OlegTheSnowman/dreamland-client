@@ -157,6 +157,9 @@ class GuideTest(unittest.TestCase):
         self.assertEqual(dlg.level.number(), 2)
         dlg.level.ChangeValue("abc")
         self.assertEqual(dlg.level.number(), 1)
+        dlg.select_tab(dlg.tab_index("races"))
+        self.assertEqual(dlg.book.GetSelection(), 4)
+        self.assertIs(dlg.last_focus, races.search)
         dlg.Destroy()
         opts = []
         dlg = GuideDialog(frame, Tr("en"), site, {"level": 11}, None, {"kind": "armor", "nominus": True,

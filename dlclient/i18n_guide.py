@@ -98,7 +98,7 @@ GUIDE = {
         "guide.s.row": "Level %s: %s",
         "guide.s.done": "Level %s, reached: %s",
         "guide.pickclass": "Choose your class above to see its skills.",
-        "keys.guide": "\nCtrl+J opens the game guide: zone quests for your level, items, your class skills, gods and races, from the DreamLand website. Enter or Go there on a quest or an item walks you to its zone, and on a skill to its teacher's zone. Up and Down change a level field. It refreshes itself once a day.\n",
+        "keys.guide": "\nCtrl+J opens the game guide: zone quests for your level, items, your class skills, gods and races, from the DreamLand website. Enter or Go there on a quest or an item walks you to its zone, and on a skill to its teacher's zone. Up and Down change a level field. Alt+Shift+Q, I, S, G and R open its Quests, Items, Skills, Gods and Races tab straight away, each where you left it. It refreshes itself once a day.\n",
     },
     "ua": {
         "lookup.none": "Нічого не знайдено. Випадкові речі створюються, коли випадають, тому їх немає у списку речей.",
@@ -199,7 +199,7 @@ GUIDE = {
         "guide.s.row": "Рівень %s: %s",
         "guide.s.done": "Рівень %s, досягнуто: %s",
         "guide.pickclass": "Вибери свій клас вгорі, щоб побачити його вміння.",
-        "keys.guide": "\nCtrl+J відкриває довідник гри: завдання зон для твого рівня, речі, вміння твого класу, богів і раси, з сайту DreamLand. Enter або Піти туди на завданні чи речі веде тебе до її зони, а на вмінні до зони його вчителя. Стрілки вгору і вниз змінюють рівень. Він оновлюється сам раз на добу.\n",
+        "keys.guide": "\nCtrl+J відкриває довідник гри: завдання зон для твого рівня, речі, вміння твого класу, богів і раси, з сайту DreamLand. Enter або Піти туди на завданні чи речі веде тебе до її зони, а на вмінні до зони його вчителя. Стрілки вгору і вниз змінюють рівень. Alt+Shift+Q, I, S, G і R одразу відкривають вкладки Завдання, Речі, Уміння, Боги і Раси, кожну там, де ти її залишив. Він оновлюється сам раз на добу.\n",
     },
     "ru": {
         "lookup.none": "Ничего не найдено. Случайные вещи создаются, когда выпадают, поэтому их нет в списке вещей.",
@@ -300,6 +300,6 @@ GUIDE = {
         "guide.s.row": "Уровень %s: %s",
         "guide.s.done": "Уровень %s, достигнут: %s",
         "guide.pickclass": "Выбери свой класс вверху, чтобы увидеть его умения.",
-        "keys.guide": "\nCtrl+J открывает справочник игры: задания зон для твоего уровня, вещи, умения твоего класса, богов и расы, с сайта DreamLand. Enter или Пойти туда на задании или вещи ведет тебя в ее зону, а на умении в зону его учителя. Стрелки вверх и вниз меняют уровень. Он обновляется сам раз в сутки.\n",
+        "keys.guide": "\nCtrl+J открывает справочник игры: задания зон для твоего уровня, вещи, умения твоего класса, богов и расы, с сайта DreamLand. Enter или Пойти туда на задании или вещи ведет тебя в ее зону, а на умении в зону его учителя. Стрелки вверх и вниз меняют уровень. Alt+Shift+Q, I, S, G и R сразу открывают вкладки Задания, Вещи, Умения, Боги и Расы, каждую там, где ты ее оставил. Он обновляется сам раз в сутки.\n",
     },
 }
