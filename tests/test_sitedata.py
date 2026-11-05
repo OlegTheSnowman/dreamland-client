@@ -187,6 +187,21 @@ if __name__ == "__main__":
 
 
 class StatsTest(unittest.TestCase):
+    def test_race_sort(self):
+        from dlclient import findviews
+        from dlclient.i18n import Tr
+        site = SD.Site("en", INDEX, BODY_EN, WEAPONS, ARMOR)
+        saved = []
+        views, _u = findviews.guide_views(Tr("en"), site, {"level": 1, "class": "", "align": ""}, {},
+                                          lambda c: None, saved.append)
+        races = views[4]
+        sort = next(f for f in races.filters if f.key == "racesort")
+        sort.set("str")
+        self.assertEqual(saved[-1]["race_sort"], "str")
+        labels = [r.label for r in races.rows()]
+        self.assertTrue(all(", strength " in label for label in labels))
+
+
     def test_parse_stats(self):
         from dlclient.sitedata import parse_stats
         want = {"str": -1, "int": 5, "wis": 1, "dex": 1, "con": -1}

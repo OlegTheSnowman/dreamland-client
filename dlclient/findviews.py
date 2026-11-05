@@ -248,18 +248,39 @@ def guide_views(tr, site, ctx, opts, save_ctx, save_opts):
                                     lambda p: site.zone_names(p[1]["zone_id"]))],
                     filters=character, empty=tr("guide.pickclass"))
 
-    def race_max(rec):
-        """The highest stats this race reaches in the chosen class, without rebirths."""
-        race = SD.parse_stats(rec.get("stats", ""))
+    def class_bonus():
         cls = ctx.get("class") or ""
-        bonus = site.class_stats(cls) if cls else {}
-        text = ", ".join("%s %d" % (tr("guide.maxstat." + k), 20 + race.get(k, 0) + bonus.get(k, 0))
-                         for k, _stems in SD.STAT_STEMS)
+        return cls, (site.class_stats(cls) if cls else {})
+
+    def race_values(rec, bonus):
+        """{stat: highest value} for this race in the chosen class, without rebirths."""
+        race = SD.parse_stats(rec.get("stats", ""))
+        return {k: 20 + race.get(k, 0) + bonus.get(k, 0) for k, _stems in SD.STAT_STEMS}
+
+    def race_max(rec):
+        cls, bonus = class_bonus()
+        values = race_values(rec, bonus)
+        text = ", ".join("%s %d" % (tr("guide.maxstat." + k), values[k]) for k, _stems in SD.STAT_STEMS)
         if bonus:
             return tr("guide.maxstats", cls, text)
         return tr("guide.maxstats.noclass", text)
 
-    def info_view(key, records, fields, extra=None):
+    races = site.races()
+
+    def race_rows():
+        """By name, or by the highest value of one stat, that value read in the row."""
+        key = opts.get("race_sort", "")
+        if not key:
+            return [Row(r["name"], r) for r in races]
+        _cls, bonus = class_bonus()
+        scored = sorted(((race_values(r, bonus)[key], r) for r in races), key=lambda x: (-x[0], x[1]["name"].lower()))
+        return [Row("%s, %s %d" % (r["name"], tr("guide.maxstat." + key), v), r, r["name"]) for v, r in scored]
+
+    race_sort = Filter("racesort", tr("guide.racesort"), "choice", lambda: opts.get("race_sort", ""),
+                       set_opt("race_sort"),
+                       choices=[("", tr("guide.byname"))] + [(k, tr("guide.maxstat." + k)) for k, _s in SD.STAT_STEMS])
+
+    def info_view(key, records, fields, extra=None, rows_fn=None, more_filters=()):
         rows = [Row(r["name"], r) for r in records]
 
         def detail(r):
@@ -268,11 +289,13 @@ def guide_views(tr, site, ctx, opts, save_ctx, save_opts):
                 return text
             head, _sep, body = text.partition("\n\n")
             return head + "\n" + extra(r) + ("\n\n" + body if body else "")
-        return View(key, tr("guide.tab." + key), lambda: rows, detail, filters=character)
+        return View(key, tr("guide.tab." + key), rows_fn or (lambda: rows), detail,
+                    filters=character + list(more_filters))
 
     views = [quests_v, items_v, skills_v,
              info_view("gods", site.religions(), ("paths", "patron", "gifts", "restrict")),
-             info_view("races", site.races(), ("align", "stats", "classes", "resist", "vuln", "size"), race_max)]
+             info_view("races", races, ("align", "stats", "classes", "resist", "vuln", "size"), race_max,
+                       rows_fn=race_rows, more_filters=[race_sort])]
 
     def update_ctx(new):
         """The server's word on level and class (account_chars), into the open guide."""
