@@ -35,7 +35,12 @@ def main():
             for f in files:
                 full = os.path.join(root, f)
                 z.write(full, os.path.join(NAME, os.path.relpath(full, folder)))
+    # The same zip under a name that never changes: uploaded with every release,
+    # releases/latest/download/DreamLand-windows.zip always gets the newest one.
+    stable = os.path.join(dist, "%s-windows.zip" % NAME)
+    shutil.copyfile(archive, stable)
     print(archive)
+    print(stable)
 
 
 if __name__ == "__main__":
