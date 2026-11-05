@@ -1598,39 +1598,6 @@ class MainFrame(wx.Frame):
             return True
         return len(words) > 1 and words[1] in ("read", "look", "info", "show")
 
-    TEACHER_PREFIXES = ("Teacher", "Practiced", "Вчитель", "Вчителька", "Практикується",
-                        "Учитель", "Учительница", "Практикуется")
-
-    def teacher_row(self, lines):
-        """The 'Teacher - ...' line of a skill group, as a list row with its links."""
-        for line in lines:
-            text = " ".join(line.text.split())
-            if text.startswith(self.TEACHER_PREFIXES):
-                menu = [(l.label or l.command, l.command) for l in line.links if l.command]
-                return {"label": text, "kind": "custom", "menu": menu, "keys": {}, "refresh": set()}
-        return None
-
-    RUN_LEFT = ("You still have left to run:", "Тобі залишалося бігти:", "Тебе оставалось бежать:")
-
-    def note_run_left(self, lines):
-        """Remember the rest of a run the game stopped, so it can be resumed."""
-        for line in lines:
-            if line.text.strip().startswith(self.RUN_LEFT):
-                cmd = next((l.command for l in line.links if (l.command or "").startswith("run ")), None)
-                if not cmd:
-                    rest = line.text.split(":", 1)[1].strip()
-                    cmd = "run " + rest if rest else None
-                if cmd:
-                    self.run_left = cmd
-                    wx.CallAfter(self.say, self.tr("run.stopped"))
-
-    def resume_run(self):
-        cmd = getattr(self, "run_left", None)
-        if not cmd:
-            return self.say(self.tr("run.none"))
-        self.run_left = None
-        self.send_command(cmd)
-
     def walk_path(self, command):
         """Ask the game for the route to a room and run it, closing the list."""
         if self.capture and self.capture.get("timer"):
@@ -1681,10 +1648,6 @@ class MainFrame(wx.Frame):
             _cmd, parser, _title, keys_key = textlists.PARSERS[cap["kind"]]
             rows = parser(cap["lines"], self.tr, cap.get("command") or "") if parser else []
             keys_text = self.tr(keys_key)
-        if cap["kind"] == "glist" and rows:
-            teacher = self.teacher_row(cap["lines"])
-            if teacher:
-                rows.insert(0, teacher)
         for line in (cap["lines"] if cap["kind"] not in textlists.PARSERS and frame is None else []):
             if cap["kind"] == "equipment" and not any(l.menu for l in line.links) and line.text.rstrip().endswith("nothing."):
                 rows.append({"label": " ".join(line.text.split()), "kind": "custom", "menu": [], "keys": {},
