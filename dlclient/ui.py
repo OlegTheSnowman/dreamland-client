@@ -459,8 +459,11 @@ class MainFrame(wx.Frame):
         if last in chars:
             chars.remove(last)
             chars.insert(0, last)
-        dlg = wx.SingleChoiceDialog(self, self.tr("al2.which"), self.tr("al2.title"), chars)
-        name = chars[dlg.GetSelection()] if dlg.ShowModal() == wx.ID_OK else None
+        # The last choice lets you type the name yourself this time.
+        dlg = wx.SingleChoiceDialog(self, self.tr("al2.which"), self.tr("al2.title"),
+                                    chars + [self.tr("al2.manual")])
+        i = dlg.GetSelection() if dlg.ShowModal() == wx.ID_OK else -1
+        name = chars[i] if 0 <= i < len(chars) else None
         dlg.Destroy()
         if name and name != last:
             al["last"] = name
