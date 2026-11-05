@@ -29,6 +29,8 @@ Lists for finding your way:
 
 - Ctrl+R lists the rooms of the area you are in, with the number of steps to each. Type to filter, Enter walks there.
 - Ctrl+E lists every area of the world with its levels, its danger rating and its distance from the Market Square in Midgaard. You can sort by name, level or distance, and type a level number to see the areas for it. Enter walks you there from Midgaard.
+- Ctrl+J opens the game guide, built from the DreamLand website and refreshed once a day: zone quests for your level and alignment, weapons and armor you can use (filtered by slot, level range and the stat they raise), your class's skills with the teacher of each, gods and races. Alt+Shift+Q, I, S, G and R open its tabs directly, each where you left it. Enter on a quest, an item or a skill walks you to the zone.
+- Ctrl+K finds an item by name in any language and shows its stats and where it comes from.
 
 For reading and comfort:
 
