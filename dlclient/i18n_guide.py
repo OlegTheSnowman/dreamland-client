@@ -1,5 +1,8 @@
 GUIDE = {
     "en": {
+        "guide.stat": "Best for stat",
+        "guide.anystat": "Any",
+        "guide.nominus": "Hide items with minuses",
         "guide.nobonus": "armour class only, no bonuses",
         "guide.go": "&Go there",
         "guide.nozone": "Could not find the zone %s in the area list.",
@@ -93,6 +96,9 @@ GUIDE = {
         "keys.guide": "\nCtrl+J opens the game guide: zone quests for your level, items, your class skills, gods and races, from the DreamLand website. Enter or Go there on a quest or an item walks you to its zone, and on a skill to its teacher's zone. Up and Down change a level field. It refreshes itself once a day.\n",
     },
     "ua": {
+        "guide.stat": "Найкраще для параметра",
+        "guide.anystat": "Будь-який",
+        "guide.nominus": "Сховати речі з мінусами",
         "guide.nobonus": "лише захист, без бонусів",
         "guide.go": "&Піти туди",
         "guide.nozone": "Не вдалося знайти зону %s у списку зон.",
@@ -186,6 +192,9 @@ GUIDE = {
         "keys.guide": "\nCtrl+J відкриває довідник гри: завдання зон для твого рівня, речі, вміння твого класу, богів і раси, з сайту DreamLand. Enter або Піти туди на завданні чи речі веде тебе до її зони, а на вмінні до зони його вчителя. Стрілки вгору і вниз змінюють рівень. Він оновлюється сам раз на добу.\n",
     },
     "ru": {
+        "guide.stat": "Лучшее для параметра",
+        "guide.anystat": "Любой",
+        "guide.nominus": "Скрыть вещи с минусами",
         "guide.nobonus": "только защита, без бонусов",
         "guide.go": "&Пойти туда",
         "guide.nozone": "Не удалось найти зону %s в списке зон.",

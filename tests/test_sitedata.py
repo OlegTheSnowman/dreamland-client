@@ -134,6 +134,15 @@ class GuideTest(unittest.TestCase):
         self.assertEqual([r[0] for r in skills.rows[:3]], ["Level 1, reached: dagger", "Level 1, reached: kick", "Level 7, reached: hide"])
         self.assertEqual(gods.rows[0][0], "Taiphoen")
         self.assertIn("The dark one.", gods.rows[0][1])
+        items.stat.SetSelection(2)  # damroll
+        items.refill()
+        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
+        items.stat.SetSelection(1)  # hitroll: the blade has none
+        items.refill()
+        self.assertEqual(items.rows, [])
+        items.stat.SetSelection(0)
+        self.assertTrue(SD.has_minus({"hr": -1}))
+        self.assertEqual(SD.stat_gain({"saves": -2}, "saves"), 2)
         dlg.set_context({"level": 2, "class": "ninja", "align": "good"})
         self.assertEqual(saved[-1], {"level": 2, "class": "ninja", "align": "good"})
         self.assertEqual(quests.rows, [])

@@ -334,6 +334,16 @@ class GuideDialog(wx.Dialog):
             labelled(page, box, label, ctrl)
             row.Add(box, 1, wx.ALL, 2)
         page.extra.Add(row, 0, wx.EXPAND)
+        page.stat = wx.Choice(page, choices=[tr("guide.anystat")] + [tr("guide.stat." + label)
+                                                                      for _key, label in SD.STATS])
+        page.stat.SetSelection(0)
+        page.nominus = wx.CheckBox(page, label=tr("guide.nominus"))
+        row2 = wx.BoxSizer(wx.HORIZONTAL)
+        box = wx.BoxSizer(wx.VERTICAL)
+        labelled(page, box, tr("guide.stat"), page.stat)
+        row2.Add(box, 1, wx.ALL, 2)
+        row2.Add(page.nominus, 1, wx.ALL | wx.ALIGN_BOTTOM, 8)
+        page.extra.Add(row2, 0, wx.EXPAND)
 
         def kind():
             return "weapon" if page.kind.GetSelection() == 0 else "armor"
@@ -350,12 +360,21 @@ class GuideDialog(wx.Dialog):
             slot = page.slot_values[i] if 0 < i < len(page.slot_values) else None
             found = site.items(k, page.low.number(), page.high.number(), self.context()["align"] or None,
                                slot=slot if k == "armor" else None, wclass=slot if k == "weapon" else None)
+            j = page.stat.GetSelection()
+            if 1 <= j <= len(SD.STATS):
+                key = SD.STATS[j - 1][0]
+                found = sorted((it for it in found if SD.stat_gain(it, key) > 0),
+                               key=lambda it: (-SD.stat_gain(it, key), -(SD.num(it.get("level")) or 0)))
+            if page.nominus.GetValue():
+                found = [it for it in found if not SD.has_minus(it)]
             return [(item_row(tr, site, it, k), item_detail(tr, site, it, k),
                      item_row(tr, site, it, k) + " " + " ".join(site.item_place(it)),
                      [n for n in (site.item_place(it)[0], it.get("areaEn"), it.get("area")) if n]) for it in found]
         slots()
         page.kind.Bind(wx.EVT_CHOICE, lambda e: (slots(), page.refill()))
         page.slot.Bind(wx.EVT_CHOICE, lambda e: page.refill())
+        page.stat.Bind(wx.EVT_CHOICE, lambda e: page.refill())
+        page.nominus.Bind(wx.EVT_CHECKBOX, lambda e: page.refill())
         for ctrl in (page.low, page.high):
             ctrl.Bind(wx.EVT_TEXT, lambda e: page.refill())
         page.build = build

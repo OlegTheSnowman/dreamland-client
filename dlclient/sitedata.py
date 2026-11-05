@@ -354,12 +354,25 @@ def word(tr, prefix, value):
     return value if text == key else text
 
 
+STATS = (("hr", "hit"), ("dr", "dam"), ("hp", "hp"), ("mana", "mana"), ("move", "mv"),
+         ("saves", "saves"), ("stat_str", "str"), ("stat_int", "int"), ("stat_wis", "wis"),
+         ("stat_dex", "dex"), ("stat_con", "con"), ("stat_cha", "cha"))
+
+
+def stat_gain(it, key):
+    """How much an item helps with one stat; saves count the other way (lower is better)."""
+    v = num(it.get(key)) or 0
+    return -v if key == "saves" else v
+
+
+def has_minus(it):
+    return any(stat_gain(it, key) < 0 for key, _label in STATS)
+
+
 def stat_text(it, tr=None):
     """'hit +1, dam +2, str +1' from an item record."""
     parts = []
-    for key, label in (("hr", "hit"), ("dr", "dam"), ("hp", "hp"), ("mana", "mana"), ("move", "mv"),
-                       ("saves", "saves"), ("stat_str", "str"), ("stat_int", "int"), ("stat_wis", "wis"),
-                       ("stat_dex", "dex"), ("stat_con", "con"), ("stat_cha", "cha")):
+    for key, label in STATS:
         v = num(it.get(key))
         if v:
             parts.append("%s %+d" % (word(tr, "guide.stat.", label), v))
