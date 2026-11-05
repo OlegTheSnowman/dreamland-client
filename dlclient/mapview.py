@@ -7,6 +7,13 @@ DIR_ORDER = ["north", "east", "south", "west", "up", "down"]
 
 
 
+def _desc(room, lang):
+    desc = room.get("description") or ""
+    if lang != "ru":
+        desc = ((room.get("i18n") or {}).get(lang) or {}).get("description") or desc
+    return COLOUR.sub("", desc).strip()
+
+
 def _name(room, lang):
     name = room.get("name") or ""
     if lang != "ru":
@@ -53,7 +60,8 @@ class AreaMap:
                 exits.append({"dir": d, "to": int(ex.get("target") or 0), "style": style,
                               "area": info.get("targetArea") or "", "door": info.get("doorKeyword") or ""})
             exits.sort(key=lambda x: DIR_ORDER.index(x["dir"]))
-            self.rooms[vnum] = {"vnum": vnum, "name": _name(room, lang), "sector": room.get("sector") or "unknown",
+            self.rooms[vnum] = {"vnum": vnum, "name": _name(room, lang), "desc": _desc(room, lang),
+                                "sector": room.get("sector") or "unknown",
                                 "x": int(pos.get("x", 0)), "y": int(pos.get("y", 0)), "z": int(pos.get("z", 0)),
                                 "exits": exits}
         for r in self.rooms.values():
