@@ -354,7 +354,7 @@ TOOLS = {
         "rooms.search": "Поиск",
         "rooms.list": "Комнаты",
         "rooms.walk": "&Пойти туда",
-        "rooms.route": "Показать &путь",
+        "rooms.route": "По&казать путь",
         "rooms.none": "Ни одна комната не подходит.",
         "rooms.loading": "Загружаю карту...",
         "rooms.nowhere": "Сначала войди: зону видно, когда ты в игре.",
