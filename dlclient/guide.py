@@ -61,13 +61,13 @@ def item_row(tr, site, it, kind):
     parts = [site.item_name(it), tr("guide.lvl", SD.num(it.get("level")) or 0)]
     if kind == "weapon":
         if it.get("wclass"):
-            parts.append(it["wclass"])
+            parts.append(SD.word(tr, "guide.wc.", it["wclass"]))
         ave = SD.num(it.get("ave"))
         if ave:
             parts.append(tr("guide.ave", ave))
     elif it.get("wearloc"):
-        parts.append(it["wearloc"])
-    stats = SD.stat_text(it)
+        parts.append(SD.word(tr, "guide.wear.", it["wearloc"]))
+    stats = SD.stat_text(it, tr)
     if stats:
         parts.append(stats)
     area, where = site.item_place(it)
@@ -215,8 +215,10 @@ class GuideDialog(wx.Dialog):
         if self.on_ctx:
             self.on_ctx(ctx)
         if getattr(self, "pages", None):
-            self.items.low.SetValue(max(1, ctx["level"] - 5))
-            self.items.high.SetValue(ctx["level"])
+            if ctx["level"] != self.items.level:
+                self.items.level = ctx["level"]
+                self.items.low.SetValue(max(1, ctx["level"] - 5))
+                self.items.high.SetValue(ctx["level"])
             for p in self.pages:
                 p.refill(p.list.GetSelection() if p is not self.skills else self.skill_start())
 
@@ -245,6 +247,7 @@ class GuideDialog(wx.Dialog):
         tr, site = self.tr, self.site
         page = Page(self.book, tr, tr("guide.tab.items"))
         lvl = self.level.GetValue()
+        page.level = lvl
         page.kind = wx.Choice(page, choices=[tr("guide.weapons"), tr("guide.armor")])
         page.kind.SetSelection(0)
         page.slot = wx.Choice(page)
@@ -263,7 +266,8 @@ class GuideDialog(wx.Dialog):
 
         def slots():
             page.slot_values = [""] + site.slots(kind())
-            page.slot.Set([tr("guide.anyslot")] + page.slot_values[1:])
+            prefix = "guide.wc." if kind() == "weapon" else "guide.wear."
+            page.slot.Set([tr("guide.anyslot")] + [SD.word(tr, prefix, v) for v in page.slot_values[1:]])
             page.slot.SetSelection(0)
 
         def build():

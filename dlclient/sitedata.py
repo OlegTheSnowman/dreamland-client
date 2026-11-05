@@ -12,6 +12,7 @@ import html
 import json
 import os
 import re
+import threading
 import time
 import urllib.request
 
@@ -50,15 +51,32 @@ def files_for(lang):
     return ["help-index.json", "help-body-%s.json" % lang, "db_weapon.json", "db_armor.json"]
 
 
+_lock = threading.Lock()
+
+
+def _readable(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            json.load(f)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def refresh(lang, force=False, timeout=30):
-    """Download whatever is missing or older than a day. Returns True if all are there."""
+    """Download whatever is missing, broken or older than a day. Returns True if all are there."""
     if os.environ.get("DLCLIENT_QUIET"):
         return all(os.path.exists(os.path.join(folder(), f)) for f in files_for(lang))
+    with _lock:
+        return _refresh(lang, force, timeout)
+
+
+def _refresh(lang, force, timeout):
     ok = True
     for name in files_for(lang):
         path = os.path.join(folder(), name)
         fresh = os.path.exists(path) and time.time() - os.path.getmtime(path) < MAX_AGE
-        if fresh and not force:
+        if fresh and not force and _readable(path):
             continue
         try:
             req = urllib.request.Request(BASE + name, headers={"User-Agent": "DreamLand desktop client"})
@@ -69,7 +87,7 @@ def refresh(lang, force=False, timeout=30):
                 f.write(body)
             os.replace(path + ".tmp", path)
         except Exception:
-            ok = ok and os.path.exists(path)
+            ok = ok and _readable(path)
     return ok
 
 
@@ -283,7 +301,16 @@ def align_ok(text, align):
     return any(w in t for w in ALIGN_CODES.get(align, ())[1:])
 
 
-def stat_text(it):
+def word(tr, prefix, value):
+    """A database word (sword, torso, hit) in the user's language, or as is."""
+    if not tr or not value:
+        return value
+    key = prefix + value.replace(" ", "_")
+    text = tr(key)
+    return value if text == key else text
+
+
+def stat_text(it, tr=None):
     """'hit +1, dam +2, str +1' from an item record."""
     parts = []
     for key, label in (("hr", "hit"), ("dr", "dam"), ("hp", "hp"), ("mana", "mana"), ("move", "mv"),
@@ -291,5 +318,5 @@ def stat_text(it):
                        ("stat_dex", "dex"), ("stat_con", "con"), ("stat_cha", "cha")):
         v = num(it.get(key))
         if v:
-            parts.append("%s %+d" % (label, v))
+            parts.append("%s %+d" % (word(tr, "guide.stat.", label), v))
     return ", ".join(parts)
