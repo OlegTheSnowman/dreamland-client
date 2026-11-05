@@ -248,14 +248,31 @@ def guide_views(tr, site, ctx, opts, save_ctx, save_opts):
                                     lambda p: site.zone_names(p[1]["zone_id"]))],
                     filters=character, empty=tr("guide.pickclass"))
 
-    def info_view(key, records, fields):
+    def race_max(rec):
+        """The highest stats this race reaches in the chosen class, without rebirths."""
+        race = SD.parse_stats(rec.get("stats", ""))
+        cls = ctx.get("class") or ""
+        bonus = site.class_stats(cls) if cls else {}
+        text = ", ".join("%s %d" % (tr("guide.maxstat." + k), 20 + race.get(k, 0) + bonus.get(k, 0))
+                         for k, _stems in SD.STAT_STEMS)
+        if bonus:
+            return tr("guide.maxstats", cls, text)
+        return tr("guide.maxstats.noclass", text)
+
+    def info_view(key, records, fields, extra=None):
         rows = [Row(r["name"], r) for r in records]
-        return View(key, tr("guide.tab." + key), lambda: rows, lambda r: info_detail(site, r, fields),
-                    filters=character)
+
+        def detail(r):
+            text = info_detail(site, r, fields)
+            if not extra:
+                return text
+            head, _sep, body = text.partition("\n\n")
+            return head + "\n" + extra(r) + ("\n\n" + body if body else "")
+        return View(key, tr("guide.tab." + key), lambda: rows, detail, filters=character)
 
     views = [quests_v, items_v, skills_v,
              info_view("gods", site.religions(), ("paths", "patron", "gifts", "restrict")),
-             info_view("races", site.races(), ("align", "stats", "classes", "resist", "vuln", "size"))]
+             info_view("races", site.races(), ("align", "stats", "classes", "resist", "vuln", "size"), race_max)]
 
     def update_ctx(new):
         """The server's word on level and class (account_chars), into the open guide."""

@@ -106,6 +106,22 @@ def header(text, lang=None):
     return out
 
 
+# Stat names in the help's "+2 to str" / "+2 к силе" / "+2 до силі" lists, by word start.
+STAT_STEMS = (("str", ("str", "сил")), ("int", ("int", "инт", "інт")), ("wis", ("wis", "мудр")),
+              ("dex", ("dex", "ловк", "сприт")), ("con", ("con", "слож", "стат")))
+
+
+def parse_stats(text):
+    """'+3 to str, -2 to int' -> {'str': 3, 'int': -2}, in any of the three languages."""
+    out = {}
+    for m in re.finditer(r"([+-]\d+)\s+\S+\s+(\w+)", text or ""):
+        word = m.group(2).lower()
+        for key, stems in STAT_STEMS:
+            if word.startswith(stems):
+                out[key] = int(m.group(1))
+    return out
+
+
 class Site:
     def __init__(self, lang, index, body, weapons, armor):
         self.lang = lang if lang in LABELS else "en"
@@ -251,6 +267,16 @@ class Site:
             return []
         toc = e.get("toc") or {}
         return [n for n in (self.title(e), toc.get("en"), toc.get("ru"), toc.get("ua")) if n]
+
+    def class_stats(self, cls_en):
+        """The class's stat bonuses from its help article, {'str': 2, ...}."""
+        want = (cls_en or "").strip().lower()
+        e = next((x for x in self.index if (x.get("toc") or {}).get("en", "").lower() == want
+                  and str(x["id"]) in self.body), None) if want else None
+        if not e:
+            return {}
+        m = re.search(r"%s\s*:\s*(.+)" % re.escape(self.L["stats"]), strip(self.body[str(e["id"])]))
+        return parse_stats(m.group(1)) if m else {}
 
     # Religions and races -------------------------------------------------
     def religions(self):

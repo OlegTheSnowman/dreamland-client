@@ -184,3 +184,16 @@ class GuideTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StatsTest(unittest.TestCase):
+    def test_parse_stats(self):
+        from dlclient.sitedata import parse_stats
+        want = {"str": -1, "int": 5, "wis": 1, "dex": 1, "con": -1}
+        self.assertEqual(parse_stats("-1 to str, +5 to int, +1 to wis, +1 to dex, -1 to con"), want)
+        self.assertEqual(parse_stats("-1 к силе, +5 к интеллекту, "
+                                     "+1 к мудрости, +1 к ловкости, "
+                                     "-1 к сложению"), want)
+        self.assertEqual(parse_stats("+2 до силі, +1 до інтелекту, "
+                                     "+1 до спритності, +1 до статурі"),
+                         {"str": 2, "int": 1, "dex": 1, "con": 1})
