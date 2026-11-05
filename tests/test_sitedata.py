@@ -118,7 +118,7 @@ class ParseTest(unittest.TestCase):
 class GuideTest(unittest.TestCase):
     def test_dialog(self):
         import wx
-        from dlclient.guide import GuideDialog
+        from dlclient.guide import GuideDialog, item_detail
         from dlclient.i18n import Tr
         app = wx.App.Get() or wx.App()
         frame = wx.Frame(None)
@@ -129,18 +129,25 @@ class GuideTest(unittest.TestCase):
         self.assertEqual(len(quests.rows), 2)
         self.assertIn("Drow City: Bring the spider", quests.rows[0][0])
         self.assertIn("Midgaard, 3s2w", quests.rows[0][1])
-        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
+        # From level 1 by default: the level 5 dagger is listed too.
+        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade", "plain dagger"])
         self.assertIn("Limited item", items.rows[0][1])
         self.assertEqual([r[0] for r in skills.rows[:3]], ["Level 1, reached: dagger", "Level 1, reached: kick", "Level 7, reached: hide"])
         self.assertEqual(gods.rows[0][0], "Taiphoen")
         self.assertIn("The dark one.", gods.rows[0][1])
-        items.stat.SetSelection(2)  # damroll
+        items.stat.SetSelection(3)  # damroll (after Any, Overall, hitroll)
         items.refill()
         self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
-        items.stat.SetSelection(1)  # hitroll: the blade has none
+        items.stat.SetSelection(2)  # hitroll: neither weapon has any
         items.refill()
         self.assertEqual(items.rows, [])
+        items.stat.SetSelection(1)  # overall: the blade (dam +2) ranks, the bare dagger does not
+        items.refill()
+        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
         items.stat.SetSelection(0)
+        self.assertEqual(site.class_weapons("ninja"), [])  # the fixture's skills are not weapons
+        self.assertEqual(site.zone_info("Drow City"), ("3-20", "high"))
+        self.assertIn("Zone: 3-20, high.", item_detail(Tr("en"), site, {"nameEn": "x", "level": 5, "areaEn": "Drow City", "vnum": 1}, "armor"))
         self.assertTrue(SD.has_minus({"hr": -1}))
         self.assertEqual(SD.stat_gain({"saves": -2}, "saves"), 2)
         dlg.set_context({"level": 2, "class": "ninja", "align": "good"})
@@ -166,7 +173,7 @@ class GuideTest(unittest.TestCase):
                                                                        "fits": False, "stat": "hp"}, opts.append)
         quests, items = dlg.pages[:2]
         self.assertEqual((items.kind.GetSelection(), items.nominus.GetValue(), quests.fits.GetValue()), (1, True, False))
-        self.assertEqual(items.stat.GetSelection(), 3)
+        self.assertEqual(items.stat.GetSelection(), 4)  # health
         self.assertEqual([r[0].split(",")[0] for r in items.rows], ["mail"])
         dlg.save_opt("fits", True)
         self.assertTrue(opts[-1]["fits"] and opts[-1]["kind"] == "armor")

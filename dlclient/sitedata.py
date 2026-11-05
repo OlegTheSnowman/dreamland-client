@@ -114,6 +114,7 @@ class Site:
         self.body = body
         self.weapons = weapons
         self.armor = armor
+        self._zones = None
 
     @classmethod
     def load(cls, lang):
@@ -308,6 +309,29 @@ class Site:
         key = "wclass" if kind == "weapon" else "wearloc"
         return sorted({it[key] for it in src if isinstance(it.get(key), str) and it[key]})
 
+    def class_weapons(self, cls_en):
+        """The weapon types a class has a skill for (sword, dagger, ...), read
+        from the English names of its skills' help articles."""
+        kinds = {it.get("wclass") for it in self.weapons if it.get("wclass")}
+        names = {}
+        for e in self.index:
+            names[e.get("id")] = ((e.get("toc") or {}).get("en") or "").lower()
+        return sorted({names.get(sk["id"]) for sk in self.class_skill_list(cls_en)} & kinds)
+
+    def zone_info(self, area):
+        """(levels, danger) of the zone an item comes from, from its help article."""
+        if not area:
+            return "", ""
+        if self._zones is None:
+            self._zones = {}
+            for e in self.articles("area"):
+                head = header(self.body[str(e["id"])], self.lang)
+                info = (head.get(self.L["levels"], ""), head.get(self.L["danger"], ""))
+                for name in (self.title(e), (e.get("toc") or {}).get("en", "")):
+                    if name:
+                        self._zones.setdefault(name.lower(), info)
+        return self._zones.get(area.lower(), ("", ""))
+
     def article_text(self, ident):
         return strip(self.body.get(str(ident), "")).strip()
 
@@ -363,6 +387,16 @@ def stat_gain(it, key):
     """How much an item helps with one stat; saves count the other way (lower is better)."""
     v = num(it.get(key)) or 0
     return -v if key == "saves" else v
+
+
+def overall_score(it):
+    """One number for how much an item gives, to rank by "Overall". Hitroll and
+    damroll count most at low levels, then stats, saves, health and mana; a
+    weapon's average damage counts too."""
+    g = lambda key: stat_gain(it, key)
+    stats = sum(g(k) for k in ("stat_str", "stat_int", "stat_wis", "stat_dex", "stat_con", "stat_cha"))
+    return (2 * g("hr") + 2 * g("dr") + 1.5 * stats + 1.5 * g("saves")
+            + g("hp") / 10 + g("mana") / 20 + g("move") / 40 + (num(it.get("ave")) or 0) / 2)
 
 
 def has_minus(it):

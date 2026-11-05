@@ -10,6 +10,7 @@ from . import sitedata as SD
 from .dialogs import labelled
 
 ALIGNS = ("", "good", "neutral", "evil")
+HORSE_SLOTS = ("horse", "hooves", "feet hooves")
 # Tab order in the guide, and the letter that opens each one with Alt+Shift.
 TABS = (("quests", "Q"), ("items", "I"), ("skills", "S"), ("gods", "G"), ("races", "R"))
 
@@ -113,6 +114,9 @@ def item_detail(tr, site, it, kind):
     area, where = site.item_place(it)
     if area or where:
         lines.append(tr("guide.where", area, where) if where else area)
+    levels, danger = site.zone_info(area) if hasattr(site, "zone_info") else ("", "")
+    if levels or danger:
+        lines.append(tr("guide.zone", ", ".join(x for x in (levels, danger) if x)))
     if (it.get("align") or "").strip() not in ("", "-"):
         lines.append(tr("guide.only", ", ".join(tr("guide.align." + a) for a in ALIGNS[1:]
                                                 if SD.usable_by(it["align"], a))))
@@ -314,7 +318,7 @@ class GuideDialog(wx.Dialog):
         if getattr(self, "pages", None):
             if ctx["level"] != self.items.level:
                 self.items.level = ctx["level"]
-                self.items.low.set_number(max(1, ctx["level"] - 5))
+                self.items.low.set_number(1)
                 self.items.high.set_number(ctx["level"])
             for p in self.pages:
                 p.refill(p.list.GetSelection() if p is not self.skills else self.skill_start())
@@ -364,7 +368,7 @@ class GuideDialog(wx.Dialog):
         page.kind = wx.Choice(page, choices=[tr("guide.weapons"), tr("guide.armor")])
         page.kind.SetSelection(1 if self.opts.get("kind") == "armor" else 0)
         page.slot = wx.Choice(page)
-        page.low = NumberField(page, max(1, lvl - 5))
+        page.low = NumberField(page, 1)
         page.high = NumberField(page, lvl)
         row = wx.BoxSizer(wx.HORIZONTAL)
         for label, ctrl in ((tr("guide.kind"), page.kind), (tr("guide.slot"), page.slot),
@@ -373,10 +377,10 @@ class GuideDialog(wx.Dialog):
             labelled(page, box, label, ctrl)
             row.Add(box, 1, wx.ALL, 2)
         page.extra.Add(row, 0, wx.EXPAND)
-        page.stat = wx.Choice(page, choices=[tr("guide.anystat")] + [tr("guide.stat." + label)
-                                                                      for _key, label in SD.STATS])
-        keys = [k for k, _l in SD.STATS]
-        page.stat.SetSelection(keys.index(self.opts["stat"]) + 1 if self.opts.get("stat") in keys else 0)
+        stat_keys = ["", "overall"] + [k for k, _l in SD.STATS]
+        page.stat = wx.Choice(page, choices=[tr("guide.anystat"), tr("guide.overall")] +
+                              [tr("guide.stat." + label) for _key, label in SD.STATS])
+        page.stat.SetSelection(stat_keys.index(self.opts["stat"]) if self.opts.get("stat") in stat_keys else 0)
         page.nominus = wx.CheckBox(page, label=tr("guide.nominus"))
         page.nominus.SetValue(bool(self.opts.get("nominus")))
         row2 = wx.BoxSizer(wx.HORIZONTAL)
@@ -390,9 +394,10 @@ class GuideDialog(wx.Dialog):
             return "weapon" if page.kind.GetSelection() == 0 else "armor"
 
         def slots():
-            page.slot_values = [""] + site.slots(kind())
+            page.slot_values = [""] + (["mine"] if kind() == "weapon" else []) + site.slots(kind())
             prefix = "guide.wc." if kind() == "weapon" else "guide.wear."
-            page.slot.Set([tr("guide.anyslot")] + [SD.word(tr, prefix, v) for v in page.slot_values[1:]])
+            page.slot.Set([tr("guide.anyslot")] + [tr("guide.mineweapons") if v == "mine" else SD.word(tr, prefix, v)
+                                                    for v in page.slot_values[1:]])
             want = self.opts.get("slot_" + kind())
             page.slot.SetSelection(page.slot_values.index(want) if want in page.slot_values else 0)
 
@@ -400,11 +405,23 @@ class GuideDialog(wx.Dialog):
             k = kind()
             i = page.slot.GetSelection()
             slot = page.slot_values[i] if 0 < i < len(page.slot_values) else None
+            mine = slot == "mine"
             found = site.items(k, page.low.number(), page.high.number(), self.context()["align"] or None,
-                               slot=slot if k == "armor" else None, wclass=slot if k == "weapon" else None)
-            j = page.stat.GetSelection()
-            if 1 <= j <= len(SD.STATS):
-                key = SD.STATS[j - 1][0]
+                               slot=slot if k == "armor" else None,
+                               wclass=slot if k == "weapon" and not mine else None)
+            if k == "armor" and not slot:
+                # Saddles and horseshoes are for centaurs: shown only when that
+                # slot is picked by hand.
+                found = [it for it in found if it.get("wearloc") not in HORSE_SLOTS]
+            if mine:
+                cls = self.context()["class"]
+                allowed = set(site.class_weapons(cls)) if cls else set()
+                found = [it for it in found if it.get("wclass") in allowed]
+            key = stat_key()
+            if key == "overall":
+                found = sorted((it for it in found if SD.overall_score(it) > 0),
+                               key=lambda it: (-SD.overall_score(it), -(SD.num(it.get("level")) or 0)))
+            elif key:
                 found = sorted((it for it in found if SD.stat_gain(it, key) > 0),
                                key=lambda it: (-SD.stat_gain(it, key), -(SD.num(it.get("level")) or 0)))
             if page.nominus.GetValue():
@@ -415,7 +432,7 @@ class GuideDialog(wx.Dialog):
         slots()
         def stat_key():
             j = page.stat.GetSelection()
-            return SD.STATS[j - 1][0] if 1 <= j <= len(SD.STATS) else ""
+            return stat_keys[j] if 0 <= j < len(stat_keys) else ""
 
         def slot_key():
             i = page.slot.GetSelection()
