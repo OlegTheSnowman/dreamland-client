@@ -13,6 +13,8 @@ The window does no game actions itself: an action closes it with
 (view key, action key, payload) in `result`, and the caller walks, sends or
 shows what it means.
 """
+import re
+
 import wx
 
 from .access import NamedAccessible
@@ -25,13 +27,22 @@ def _name(ctrl, label):
     return ctrl
 
 
+_WORD = re.compile(r"\w+")
+
+
+def matches(row_words, typed):
+    """Every typed word starts some word of the row: "g" finds Githyanki, not Centaur."""
+    return all(any(w.startswith(t) for w in row_words) for t in typed)
+
+
 class Row:
     __slots__ = ("label", "search", "payload")
 
     def __init__(self, label, payload=None, search=None):
         self.label = label
         self.payload = payload
-        self.search = (search if search is not None else label).lower()
+        # The words of the row, for typeahead: a typed word matches the start of one.
+        self.search = _WORD.findall((search if search is not None else label).lower())
 
 
 class Filter:
@@ -228,12 +239,12 @@ class ViewPanel(wx.Panel):
         """keep: the payload to stay on, else the row at the same place."""
         old = self.selected()
         index = self.list.GetSelection()
-        words = self.search.GetValue().strip().lower().split()
+        words = _WORD.findall(self.search.GetValue().lower())
         if self.all_rows is None:
             self.all_rows = self.view.rows()
         rows = self.all_rows
         if words:
-            rows = [r for r in rows if all(w in r.search for w in words)]
+            rows = [r for r in rows if matches(r.search, words)]
         self.shown = rows
         self.list.Freeze()
         try:

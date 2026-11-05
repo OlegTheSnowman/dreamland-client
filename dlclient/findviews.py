@@ -249,7 +249,7 @@ def guide_views(tr, site, ctx, opts, save_ctx, save_opts):
                     filters=character, empty=tr("guide.pickclass"))
 
     def info_view(key, records, fields):
-        rows = [Row(r["name"], r, " ".join([r["name"]] + [r.get(f, "") for f in fields])) for r in records]
+        rows = [Row(r["name"], r) for r in records]
         return View(key, tr("guide.tab." + key), lambda: rows, lambda r: info_detail(site, r, fields),
                     filters=character)
 

@@ -45,6 +45,12 @@ class FindWindowTest(unittest.TestCase):
         self.assertEqual(len(p.shown), 3)
         p.search.SetValue("ябл")
         self.assertEqual([r.payload for r in p.shown], [2])
+        p.search.SetValue("pie")
+        self.assertEqual([r.payload for r in p.shown], [1])
+        p.search.SetValue("ple")  # inside a word: no match
+        self.assertEqual(p.shown, [])
+        p.search.SetValue("ukr ябл")
+        self.assertEqual([r.payload for r in p.shown], [2])
         p.search.SetValue("")
         p.list.SetSelection(1)
         p.run(view.actions[0])
