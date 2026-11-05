@@ -90,9 +90,7 @@ def skills(lines, tr, command=""):
 
 
 QSHOP_ROW = re.compile(r"^\s*(\d+)\.\s+(.+?), word (\S+):\s*(.+?)\.?$")
-QREQ_ROW = re.compile(r"^\s*(\d+)\.\s+(.+?)\s*\(([^)]*)\)\s*$")
 ZQUEST_HEAD = re.compile(r"^\[\s*(\d+)\]\s+(.+)$")
-AREA_CELL = re.compile(r"(\S(?:.*?\S)?)\s{2,}(\d+-\d+)?\s*(safe|easy|hard|deadly)\b")
 
 
 def quest_shop(lines, tr, command=""):
@@ -107,18 +105,6 @@ def quest_shop(lines, tr, command=""):
                          "keys": {(ord("B"), True): ["quest buy " + n]}, "refresh": {"quest buy " + n}})
         elif text and not re.match(r"^(You |To buy|List of|.*asks? .* show)", text) and ":" not in text:
             section = text
-    return rows
-
-
-def quest_request(lines, tr, command=""):
-    rows = []
-    for line in lines:
-        m = QREQ_ROW.match(line.text)
-        if m:
-            cmd = "quest request " + m.group(1)
-            rows.append({"label": "%s, %s" % (m.group(2).strip(), m.group(3).strip()), "kind": "custom",
-                         "menu": [(tr("tl.request"), cmd)], "keys": {(ord("B"), True): [cmd]}, "refresh": set(),
-                         "close": True})
     return rows
 
 
@@ -141,116 +127,24 @@ def zone_quests(lines, tr, command=""):
     return rows
 
 
-def areas(lines, tr, command=""):
-    rows = []
-    for line in lines:
-        for m in AREA_CELL.finditer(line.text):
-            name = m.group(1).strip()
-            label = name + (", levels %s" % m.group(2) if m.group(2) else "") + ", " + m.group(3)
-            rows.append({"label": label, "kind": "custom", "menu": [(tr("tl.help"), "help " + name)],
-                         "keys": {(ord("H"), True): ["help " + name]}, "refresh": set()})
-    return rows
-
-
+# A parser of None means the server sends the list as a "list" frame
+# (framelists.py); without a frame the game's own text is shown.
 PARSERS = {"shop": ("list", shop, "tl.shop", "tl.shopkeys"),
            "services": ("service", services, "tl.services", "tl.servicekeys"),
            "training": ("train", training, "tl.training", "tl.trainkeys"),
            "skills": ("practice", skills, "tl.skills", "tl.skillkeys"),
-           "skilltable": ("skills", skills, "tl.skills", "tl.skillkeys"),
+           "skilltable": ("skills", None, "tl.skills", "tl.skillkeys"),
            "questshop": ("quest list", quest_shop, "tl.questshop", "tl.questshopkeys"),
-           "questrequest": ("quest request", quest_request, "tl.questrequest", "tl.questrequestkeys"),
+           "questrequest": ("quest request", None, "tl.questrequest", "tl.questrequestkeys"),
            "zonequests": ("quest", zone_quests, "tl.zonequests", "tl.zonequestkeys"),
-           "areas": ("areas", areas, "tl.areas", "tl.areakeys")}
+           "areas": ("areas", None, "tl.areas", "tl.areakeys")}
 
 
-NOTE_ROW = re.compile(r"^\[(\d+)\s*\]\s*(.*)$")
-HELP_ROW = re.compile(r"^\[\s*(\d+)\]\s+(\S.*)$")
-SOCIAL_ROW = re.compile(r"^(\S+) -- (\S.*)$")
-SECTION_ROW = re.compile(r"^([^:]{2,40}):\s+(\S.*)$")
 PAGER = ("Press Enter to continue", "Нажмите клавишу Enter для продолжения", "Натисни Enter, щоб продовжити")
 
 
 def is_pager(text):
     return any(p in text for p in PAGER)
-
-
-def notes(lines, tr, command=""):
-    board = (command.split() or ["note"])[0]
-    rows = []
-    for line in lines:
-        m = NOTE_ROW.match(line.text.strip())
-        if m:
-            cmd = "%s read %s" % (board, m.group(1))
-            rows.append({"label": "%s. %s" % (m.group(1), m.group(2).strip() or "-"), "kind": "custom",
-                         "menu": [(tr("tl.read"), cmd)], "keys": {(ord("R"), True): [cmd]}, "refresh": set()})
-    return rows
-
-
-def help_matches(lines, tr, command=""):
-    rows = []
-    for line in lines:
-        m = HELP_ROW.match(line.text.strip())
-        if m:
-            cmd = "help " + m.group(1)
-            rows.append({"label": m.group(2), "kind": "custom", "menu": [(tr("tl.read"), cmd)],
-                         "keys": {(ord("R"), True): [cmd]}, "refresh": set(), "close": True})
-    return rows
-
-
-def skill_groups(lines, tr, command=""):
-    rows = []
-    if len(command.split()) > 1:
-        started = False
-        for line in lines:
-            text = line.text.strip()
-            if text.endswith(":") and not started:
-                started = True
-                continue
-            if not started or not text:
-                continue
-            for name in re.split(r"\s{2,}", text):
-                name = name.strip()
-                if name:
-                    q = quoted(name)
-                    rows.append({"label": name, "kind": "custom",
-                                 "menu": [(tr("tl.help"), "help " + name), (tr("tl.practice"), "practice " + q)],
-                                 "keys": {(ord("H"), True): ["help " + name], (ord("P"), True): ["practice " + q]},
-                                 "refresh": set()})
-        return rows
-    for line in lines:
-        if line.text.startswith("    ") and line.text.strip():
-            name = line.text.strip()
-            rows.append({"label": name, "kind": "custom", "menu": [(tr("tl.openlist"), "glist " + name)],
-                         "keys": {}, "refresh": set(), "open": ("glist", "glist " + name)})
-    return rows
-
-
-def socials(lines, tr, command=""):
-    rows = []
-    for line in lines:
-        m = SOCIAL_ROW.match(line.text.strip())
-        if m:
-            name = m.group(1)
-            rows.append({"label": "%s, %s" % (name, m.group(2)), "kind": "custom",
-                         "menu": [(tr("tl.dosocial"), name), (tr("tl.socialat"), "__target__ " + name),
-                                  (tr("tl.helpsocial"), "help " + name)],
-                         "keys": {(ord("B"), True): [name], (ord("H"), True): ["help " + name]},
-                         "target": name, "refresh": set()})
-    return rows
-
-
-def command_summary(lines, tr, command=""):
-    rows = []
-    for line in lines:
-        m = SECTION_ROW.match(line.text.strip())
-        if not m or m.group(1).startswith(("Full list", "All help")):
-            continue
-        for name in m.group(2).split():
-            if len(name) > 1:
-                rows.append({"label": "%s, %s" % (name, m.group(1)), "kind": "custom",
-                             "menu": [(tr("tl.help"), "help " + name)], "keys": {(ord("H"), True): ["help " + name]},
-                             "refresh": set()})
-    return rows
 
 
 def linked(lines, tr, command=""):
@@ -266,10 +160,10 @@ def linked(lines, tr, command=""):
 
 
 PARSERS.update({
-    "notes": ("note list", notes, "tl.notes", "tl.notekeys"),
-    "helpmatches": ("help", help_matches, "tl.helpmatches", "tl.helpkeys"),
-    "glist": ("glist", skill_groups, "tl.glist", "tl.glistkeys"),
-    "socials": ("socials", socials, "tl.socials", "tl.socialkeys"),
-    "commands": ("commands", command_summary, "tl.commands", "tl.commandkeys"),
+    "notes": ("note list", None, "tl.notes", "tl.notekeys"),
+    "helpmatches": ("help", None, "tl.helpmatches", "tl.helpkeys"),
+    "glist": ("glist", None, "tl.glist", "tl.glistkeys"),
+    "socials": ("socials", None, "tl.socials", "tl.socialkeys"),
+    "commands": ("commands", None, "tl.commands", "tl.commandkeys"),
     "linked": ("vault", linked, "tl.linked", "tl.linkedkeys"),
 })

@@ -86,13 +86,8 @@ class TextListTest(unittest.TestCase):
 
     def test_quest_lists(self):
         self.assertEqual(rows(T.quest_shop, QS)[1][1], "quest buy 9")
-        self.assertEqual(rows(T.quest_request, QR)[1], ("Royal Treasures, easy", "quest request 5"))
         self.assertTrue(rows(T.zone_quests, ZQ)[0][0].startswith("Prisoner of the Hobgoblins"))
 
-    def test_areas(self):
-        got = rows(T.areas, AR)
-        self.assertEqual(len(got), 6)
-        self.assertEqual(got[4], ("Quifael Area, safe", "help Quifael Area"))
 
 
 if __name__ == "__main__":

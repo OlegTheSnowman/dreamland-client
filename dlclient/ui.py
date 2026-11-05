@@ -1679,7 +1679,7 @@ class MainFrame(wx.Frame):
                 keys_text = self.tr(textlists.PARSERS[cap["kind"]][3])
         elif cap["kind"] in textlists.PARSERS:
             _cmd, parser, _title, keys_key = textlists.PARSERS[cap["kind"]]
-            rows = parser(cap["lines"], self.tr, cap.get("command") or "")
+            rows = parser(cap["lines"], self.tr, cap.get("command") or "") if parser else []
             keys_text = self.tr(keys_key)
         if cap["kind"] == "glist" and rows:
             teacher = self.teacher_row(cap["lines"])
