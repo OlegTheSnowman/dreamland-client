@@ -216,6 +216,7 @@ class ViewPanel(wx.Panel):
         self.list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
         self.list.Bind(wx.EVT_CHAR, self.on_list_char)
         self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.show_details())
+        self.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self.update_filters_line()))
 
     # ---- the list ----------------------------------------------------------
     def refill(self, keep=None):
@@ -232,8 +233,9 @@ class ViewPanel(wx.Panel):
         pos = next((i for i, r in enumerate(rows) if target is not None and r.payload is target), None)
         if pos is None:
             pos = min(max(index, 0), max(len(rows) - 1, 0))
-        self.list.SetSelection(pos)
         self.update_filters_line()
+        self.list.SetSelection(pos)
+        self.list.EnsureVisible(pos)
 
     def selected(self):
         i = self.list.GetSelection()
@@ -242,6 +244,11 @@ class ViewPanel(wx.Panel):
     def update_filters_line(self):
         parts = ["%s: %s" % (f.label.replace("&", ""), f.describe(self.tr)) for f in self.view.filters]
         self.filters_line.SetLabel(self.tr("find.active", "; ".join(parts)) if parts else "")
+        # A long line of filters wraps instead of running off the window.
+        width = self.GetClientSize().width - 20
+        if width > 100:
+            self.filters_line.Wrap(width)
+        self.Layout()
 
     # ---- keys --------------------------------------------------------------
     def on_search_key(self, event):
