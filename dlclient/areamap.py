@@ -137,48 +137,5 @@ def fetch_areas(lang, timeout=15):
             "note": note,
             "danger": next((d for d in DANGER if d in flags), ""),
         })
-    try:
-        fix_routes(out, city_rooms(timeout))
-    except Exception:
-        pass
     out.sort(key=lambda a: a["name"].lower())
     return out
-
-
-CITY = ("midgaard", "smidgaard")
-DIRS = {"n": "north", "e": "east", "s": "south", "w": "west", "u": "up", "d": "down"}
-
-
-def city_rooms(timeout=15):
-    """Room vnum -> {direction: target vnum} for Midgaard and South Midgaard."""
-    rooms = {}
-    for key in CITY:
-        data = fetch_graph(key, timeout).get("rooms") or {}
-        for r in data.values() if isinstance(data, dict) else data:
-            if isinstance(r, dict) and "vnum" in r:
-                rooms[r["vnum"]] = {x.get("dir"): x.get("target") for x in r.get("exits") or [] if isinstance(x, dict)}
-    return rooms
-
-
-def route_breaks(route, rooms, start=MARKET_SQUARE):
-    """True if the route runs into a wall while still inside the mapped city."""
-    cur = start
-    for count, letter in re.findall(r"(\d*)([neswud])", route.lower()):
-        for _ in range(int(count) if count else 1):
-            exits = rooms.get(cur)
-            if exits is None:
-                return False
-            if DIRS[letter] not in exits:
-                return True
-            cur = exits[DIRS[letter]]
-    return False
-
-
-def fix_routes(areas, rooms):
-    """Some routes on the website start at the Temple Square, one step north of
-    the Market Square. Add that step where the route only works from there."""
-    for a in areas:
-        route = a.get("route")
-        if route and route_breaks(route, rooms) and not route_breaks("n" + route, rooms):
-            a["route"] = "n" + route
-            a["steps"] = route_steps(a["route"])
