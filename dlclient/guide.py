@@ -95,6 +95,8 @@ def item_row(tr, site, it, kind):
     stats = SD.stat_text(it, tr)
     if stats:
         parts.append(stats)
+    elif kind != "weapon":
+        parts.append(tr("guide.nobonus"))
     area, where = site.item_place(it)
     if area:
         parts.append(area)
