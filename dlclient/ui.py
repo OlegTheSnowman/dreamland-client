@@ -246,6 +246,7 @@ class MainFrame(wx.Frame):
 
         game = wx.Menu()
         self._item(game, tr("menu.connect"), lambda e: self.connect())
+        self._item(game, tr("menu.connectmanual"), lambda e: self.connect(manual=True))
         self._item(game, tr("menu.disconnect"), lambda e: self.disconnect())
         self._item(game, tr("menu.resumerun"), lambda e: self.resume_run())
         self._item(game, tr("menu.autologin"), lambda e: self.open_autologin())
@@ -467,10 +468,11 @@ class MainFrame(wx.Frame):
                 prefs_mod.save(self.prefs)
         return name
 
-    def connect(self):
+    def connect(self, manual=False):
+        """Connect; manual skips auto login this time, so you type the name yourself."""
         if self.conn.is_open:
             return
-        self.login_name = self.pick_login()
+        self.login_name = None if manual else self.pick_login()
         self.login_asked = True
         self.conn.connect()
 
