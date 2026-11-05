@@ -25,6 +25,7 @@ from .presence import classify, kind_of
 from . import textlists
 from . import framelists
 from . import sitedata
+from .guide import GuideDialog
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -1355,7 +1356,6 @@ class MainFrame(wx.Frame):
     def _guide_loaded(self, site):
         if not site.ready():
             return self.say(self.tr("guide.offline"))
-        from .guide import GuideDialog
         dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context)
         self.guide_dlg = dlg
         try:
