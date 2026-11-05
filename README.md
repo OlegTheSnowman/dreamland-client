@@ -1,12 +1,14 @@
 # DreamLand desktop client
 
+English | [Українська](README.uk.md)
+
 A Windows client for [DreamLand](https://dreamland.rocks), a text MUD in English, Ukrainian and Russian. It is built for screen readers first and uses native Windows controls, so NVDA, JAWS and Narrator read it like any other program. Sighted players get the game's colours, a dark or light theme and any font they like.
 
 The client talks to the game exactly as the official web client does, over the same WebSocket, and takes as much as it can from the server and from the web client instead of reimplementing it. When the developers change something in the web client or on the server, this client usually picks it up without an update.
 
 ## Download
 
-Get the zip from the [latest release](https://github.com/OlegTheSnowman/dreamland-client/releases/latest), unpack it anywhere and run DreamLand.exe. Nothing needs installing. The client checks for a new release when it starts and offers to install it; Help, Check for updates does the same by hand.
+[Download the latest version](https://github.com/OlegTheSnowman/dreamland-client/releases/latest/download/DreamLand-windows.zip) (a zip; the link always points to the newest release). Unpack it anywhere and run DreamLand.exe. Nothing needs installing. The client checks for a new release when it starts and offers to install it; Help, Check for updates does the same by hand. Every version is on the [releases](https://github.com/OlegTheSnowman/dreamland-client/releases) page.
 
 ## What it does
 
