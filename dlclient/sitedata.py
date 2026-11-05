@@ -207,6 +207,50 @@ class Site:
                 out.append((int(m.group(1)), [s.strip() for s in m.group(2).split(",") if s.strip()]))
         return out
 
+    def class_skill_list(self, cls_en):
+        """[{level, name, id}] for every skill of the class, with its help article id."""
+        e = next((x for x in self.index if (x.get("toc") or {}).get("en", "").lower() == cls_en.lower() + " skills"), None)
+        if not e or str(e["id"]) not in self.body:
+            return []
+        out = []
+        for raw in self.body[str(e["id"])].split("\n"):
+            m = re.match(r"^\s*%s\s+(\d+):\s*(.+)$" % re.escape(self.L["level"]), strip(raw))
+            if not m:
+                continue
+            names = [x.strip() for x in m.group(2).split(",") if x.strip()]
+            ids = [int(i) for i in re.findall(r"<hh id='(\d+)'>", raw)]
+            for i, name in enumerate(names):
+                out.append({"level": int(m.group(1)), "name": name, "id": ids[i] if len(ids) == len(names) else None})
+        return out
+
+    def skill_teachers(self):
+        """Skill help id -> {group, teacher, zone_id}, from the skill group articles.
+
+        Each group article has one line naming its teacher (or the guild) in the
+        teacher colour, with a link to the teacher's zone when there is one."""
+        if getattr(self, "_teachers", None) is not None:
+            return self._teachers
+        areas = {e["id"] for e in self.index if "area" in (e.get("labels") or [])}
+        out = {}
+        for e in self.articles("skillgroup"):
+            raw = self.body[str(e["id"])]
+            line = next((x for x in raw.split("\n") if re.search(r"<c c='fgdg'>[^<\s]", x)), "")
+            zone = next((int(i) for i in re.findall(r"<hh id='(\d+)'>", line) if int(i) in areas), None)
+            info = {"group": self.title(e), "group_id": e["id"],
+                    "teacher": re.sub(r"\s+", " ", strip(line)).strip(" -"), "zone_id": zone}
+            for i in re.findall(r"<hh id='(\d+)'>", raw):
+                out.setdefault(int(i), info)
+        self._teachers = out
+        return out
+
+    def zone_names(self, ident):
+        """A zone's names in every language, for finding it in the area list."""
+        e = next((x for x in self.index if x.get("id") == ident), None)
+        if not e:
+            return []
+        toc = e.get("toc") or {}
+        return [n for n in (self.title(e), toc.get("en"), toc.get("ru"), toc.get("ua")) if n]
+
     # Religions and races -------------------------------------------------
     def religions(self):
         L = self.L

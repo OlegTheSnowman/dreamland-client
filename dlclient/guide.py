@@ -120,9 +120,14 @@ def item_detail(tr, site, it, kind):
     return "\n".join(lines)
 
 
-def skill_row(tr, level, skills, mine):
-    key = "guide.s.done" if mine and level <= mine else "guide.s.row"
-    return tr(key, level, ", ".join(skills))
+def skill_row(tr, sk, teacher, mine):
+    key = "guide.s.done" if mine and sk["level"] <= mine else "guide.s.row"
+    text = tr(key, sk["level"], sk["name"])
+    if teacher.get("group"):
+        text += ", " + teacher["group"]
+    if teacher.get("teacher"):
+        text += ". " + teacher["teacher"]
+    return text
 
 
 def info_detail(site, rec, fields):
@@ -269,9 +274,7 @@ class GuideDialog(wx.Dialog):
             self.EndModal(wx.ID_OK)
 
     def zone_names(self, q):
-        e = next((x for x in self.site.index if x.get("id") == q["zone_id"]), {})
-        toc = e.get("toc") or {}
-        return [n for n in (q["zone"], toc.get("en"), toc.get("ru"), toc.get("ua")) if n]
+        return self.site.zone_names(q["zone_id"]) or [q["zone"]]
 
     # Pages ---------------------------------------------------------------
     def quests_page(self):
@@ -342,16 +345,22 @@ class GuideDialog(wx.Dialog):
 
     def skills_page(self):
         tr, site = self.tr, self.site
-        page = Page(self.book, tr, tr("guide.tab.skills"))
+        page = Page(self.book, tr, tr("guide.tab.skills"), self.go)
 
         def build():
             ctx = self.context()
             if not ctx["class"]:
                 return [(tr("guide.pickclass"), tr("guide.pickclass"), "")]
+            teachers = site.skill_teachers()
             out = []
-            for level, skills in site.class_skills(ctx["class"]):
-                text = skill_row(tr, level, skills, ctx["level"])
-                out.append((text, text, text))
+            for sk in site.class_skill_list(ctx["class"]):
+                t = teachers.get(sk["id"]) or {}
+                text = skill_row(tr, sk, t, ctx["level"])
+                detail = text
+                body = site.article_text(sk["id"]) if sk["id"] else ""
+                if body:
+                    detail += "\n\n" + body
+                out.append((text, detail, text, site.zone_names(t["zone_id"]) if t.get("zone_id") else None))
             return out
         page.build = build
         self.skills = page
@@ -361,8 +370,8 @@ class GuideDialog(wx.Dialog):
     def skill_start(self):
         """The first skill level the character has not reached yet."""
         ctx = self.context()
-        rows = self.site.class_skills(ctx["class"]) if ctx["class"] else []
-        return next((i for i, (lv, _s) in enumerate(rows) if lv > ctx["level"]), 0)
+        rows = self.site.class_skill_list(ctx["class"]) if ctx["class"] else []
+        return next((i for i, sk in enumerate(rows) if sk["level"] > ctx["level"]), 0)
 
     def info_page(self, key, records, fields):
         site = self.site

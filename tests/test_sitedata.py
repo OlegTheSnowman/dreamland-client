@@ -70,6 +70,21 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(self.site().class_skills("Ninja"), [(1, ["dagger", "kick"]), (7, ["hide", "sneak"])])
         self.assertEqual(self.site("ua", BODY_UA).class_skills("ninja"), [(1, ["кинджал"])])
 
+    def test_teachers(self):
+        index = INDEX + [{"id": 9, "labels": ["skillgroup"], "cat": "classes", "toc": {"en": "Adventure"}}]
+        body = dict(BODY_EN)
+        body["2"] = ("Level </c><c c='fgbc'>7</c><c c='fgdx'>: </c><hh id='703'><c c='fgdx'>sneak</c></hh>"
+                     "<c c='fgdx'>, </c><hh id='798'><c c='fgdx'>hide</c></hh>\n")
+        body["9"] = ("Group <c c='fgby'>adventure</c>\n\nTeacher - </c><c c='fgdg'>Hassan</c><c c='fgdx'> (</c>"
+                     "<hh id='1'><c c='fgby'>Drow City</c></hh><c c='fgdx'>).\n\nSkills:\n<hh id='703'>sneak</hh>\n")
+        site = SD.Site("en", index, body, [], [])
+        self.assertEqual(site.class_skill_list("ninja"),
+                         [{"level": 7, "name": "sneak", "id": 703}, {"level": 7, "name": "hide", "id": 798}])
+        t = site.skill_teachers()[703]
+        self.assertEqual((t["teacher"], t["zone_id"], t["group"]), ("Teacher - Hassan (Drow City).", 1, "Adventure"))
+        self.assertNotIn(798, site.skill_teachers())
+        self.assertEqual(site.zone_names(1)[:2], ["Drow City", "Drow City"])
+
     def test_religion_and_race(self):
         r = self.site().religions()[0]
         self.assertEqual((r["name"], r["patron"], r["restrict"]), ("Taiphoen", "drow, ninja", "evil only"))
@@ -116,13 +131,13 @@ class GuideTest(unittest.TestCase):
         self.assertIn("Midgaard, 3s2w", quests.rows[0][1])
         self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
         self.assertIn("Limited item", items.rows[0][1])
-        self.assertEqual(skills.rows[0][0], "Level 1, reached: dagger, kick")
+        self.assertEqual([r[0] for r in skills.rows[:3]], ["Level 1, reached: dagger", "Level 1, reached: kick", "Level 7, reached: hide"])
         self.assertEqual(gods.rows[0][0], "Taiphoen")
         self.assertIn("The dark one.", gods.rows[0][1])
         dlg.set_context({"level": 2, "class": "ninja", "align": "good"})
         self.assertEqual(saved[-1], {"level": 2, "class": "ninja", "align": "good"})
         self.assertEqual(quests.rows, [])
-        self.assertEqual(skills.list.GetSelection(), 1)
+        self.assertEqual(skills.list.GetSelection(), 2)
         quests.search.SetValue("slave")
         quests.fits.SetValue(False)
         quests.refill()
