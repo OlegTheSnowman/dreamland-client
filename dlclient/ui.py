@@ -470,7 +470,6 @@ class MainFrame(wx.Frame):
             self.set_password_mode(self.nanny_password or self.telnet.echo_off)
         elif command == "version":
             self.conn.rpc("chat_subscribe", 1)
-            self.conn.rpc("list_subscribe")
             self.refresh_site_data()
             self.auto_sent = set()
             self.nanny_password = False
