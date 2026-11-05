@@ -342,7 +342,11 @@ class Site:
         names = {}
         for e in self.index:
             names[e.get("id")] = ((e.get("toc") or {}).get("en") or "").lower()
-        return sorted({names.get(sk["id"]) for sk in self.class_skill_list(cls_en)} & kinds)
+        found = {names.get(sk["id"]) for sk in self.class_skill_list(cls_en)} & kinds
+        # No class trains exotic: everyone uses it, with intelligence and level.
+        if found and "exotic" in kinds:
+            found.add("exotic")
+        return sorted(found)
 
     def zone_info(self, area):
         """(levels, danger) of the zone an item comes from, from its help article."""
