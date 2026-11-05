@@ -264,12 +264,13 @@ class MainFrame(wx.Frame):
             self._item(panels, tr("menu.panel." + key).split("\t")[0], lambda e, k=key: self.read_panel(k))
         self._item(panels, tr("menu.panel.fight").split("\t")[0], lambda e: self.fight_menu())
         game.AppendSubMenu(panels, tr("menu.panels"))
-        self._item(game, tr("menu.inventory"), lambda e: self.open_items("inventory"))
-        self._item(game, tr("menu.equipment"), lambda e: self.open_items("equipment"))
-        self._item(game, tr("menu.roomlist"), lambda e: self.open_items("room"))
-        self._item(game, tr("menu.wholist"), lambda e: self.open_items("who"))
-        for kind in ("shop", "services", "training", "skills"):
-            self._item(game, tr("menu.tl." + kind), lambda e, k=kind: self.open_items(k))
+        if self.server_lists():
+            self._item(game, tr("menu.inventory"), lambda e: self.open_items("inventory"))
+            self._item(game, tr("menu.equipment"), lambda e: self.open_items("equipment"))
+            self._item(game, tr("menu.roomlist"), lambda e: self.open_items("room"))
+            self._item(game, tr("menu.wholist"), lambda e: self.open_items("who"))
+            for kind in ("shop", "services", "training", "skills"):
+                self._item(game, tr("menu.tl." + kind), lambda e, k=kind: self.open_items(k))
         game.AppendSeparator()
         self._item(game, tr("menu.find"), lambda e: self.find_ask())
         self._item(game, tr("menu.findnext"), lambda e: self.find_step(-1))
@@ -326,9 +327,9 @@ class MainFrame(wx.Frame):
         self._item(opts, tr("menu.speechfilter"), lambda e: self.open_speech_filter())
         self._item(opts, tr("menu.stopspeech"), lambda e: self.speech.silence())
         opts.AppendSeparator()
-        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.listmenus"))
-        it.Check(bool(self.prefs.get("list_menus", True)))
-        self.Bind(wx.EVT_MENU, lambda e: self.prefs.__setitem__("list_menus", e.IsChecked()), it)
+        it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.serverlists"))
+        it.Check(self.server_lists())
+        self.Bind(wx.EVT_MENU, lambda e: self.set_server_lists(e.IsChecked()), it)
         it = opts.AppendCheckItem(wx.ID_ANY, tr("menu.tones"))
         it.Check(bool(self.prefs.get("exit_tones", True)))
         self.Bind(wx.EVT_MENU, lambda e: self.toggle_tones(), it)
@@ -497,6 +498,8 @@ class MainFrame(wx.Frame):
             self.set_password_mode(self.nanny_password or self.telnet.echo_off)
         elif command == "version":
             self.conn.rpc("chat_subscribe", 1)
+            if self.server_lists():
+                self.conn.rpc("list_subscribe")
             self.refresh_site_data()
             self.auto_sent = set()
             self.nanny_password = False
@@ -509,7 +512,7 @@ class MainFrame(wx.Frame):
                 self.notice(self.tr("state.version", PROTO_VERSION, args[0]), speak=False)
             self.parser.nonce = args[1] if len(args) > 1 else None
         elif command == "list" and args and isinstance(args[0], dict):
-            if self.capture is not None:
+            if self.capture is not None and self.server_lists():
                 self.capture["frame"] = args[0]
         elif command == "msp":
             self.parser.msp_enabled = bool(args and args[0])
@@ -1745,7 +1748,7 @@ class MainFrame(wx.Frame):
     TYPED_WITH_ARGS = {"skilltable", "shop", "who", "areas", "helpmatches", "glist", "equipment"}
 
     def typed_list(self, text):
-        if not self.prefs.get("list_menus", True) or not self.conn.in_world or self.capture or self.items_dlg:
+        if not self.server_lists() or not self.conn.in_world or self.capture or self.items_dlg:
             return False
         words = text.lower().split()
         kind = self.TYPED.get(" ".join(words))
@@ -1770,7 +1773,20 @@ class MainFrame(wx.Frame):
     LISTS = {"inventory": ("inventory", "items.inventory"), "equipment": ("equipment", "items.equipment"),
              "room": ("look", "items.room"), "who": ("who", "items.who")}
 
+    def server_lists(self):
+        """List windows built from the server's list data: experimental, off unless turned on."""
+        return bool(self.prefs.get("server_lists", False))
+
+    def set_server_lists(self, on):
+        self.prefs["server_lists"] = bool(on)
+        if on:
+            self.conn.rpc("list_subscribe")
+        self._build_menu()
+        self.say(self.tr("serverlists.on" if on else "serverlists.off"))
+
     def open_items(self, kind, command=None, title=None, container=None):
+        if not self.server_lists():
+            return self.say(self.tr("serverlists.off"))
         if not self.conn.in_world:
             return self.say(self.tr("rooms.nowhere"))
         if kind in self.LISTS:

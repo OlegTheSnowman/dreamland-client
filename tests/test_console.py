@@ -31,6 +31,19 @@ class ConsoleSmokeTest(unittest.TestCase):
         texts = [t for t, _ in f.lines]
         self.assertIn("Dark Temple", texts)
 
+    def test_server_lists_off_by_default(self):
+        f = self.frame
+        f.prefs.pop("server_lists", None)
+        self.assertFalse(f.server_lists())
+        f.capture = {"kind": "skills", "lines": []}
+        f.on_frame("list", [{"kind": "skills", "rows": []}])
+        self.assertNotIn("frame", f.capture)
+        f.prefs["server_lists"] = True
+        f.on_frame("list", [{"kind": "skills", "rows": []}])
+        self.assertIn("frame", f.capture)
+        f.capture = None
+        f.prefs.pop("server_lists", None)
+
     def test_stopped_run_is_remembered(self):
         f = self.frame
         f.conn.send_line = lambda t: True

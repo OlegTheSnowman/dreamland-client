@@ -1,5 +1,8 @@
 GUIDE = {
     "en": {
+        "menu.serverlists": "&Server lists (experimental)",
+        "serverlists.on": "Server lists are on. Inventory, equipment, who, shop, skills and other commands open as lists, and the Game menu has them.",
+        "serverlists.off": "Server lists are off. Commands show the game text as usual. Turn them on in Options, Server lists (experimental).",
         "lookup.none": "Nothing found. Random items are rolled when they drop, so they are not in the item list.",
         "menu.lookup": "Find an &item...\tCtrl+K",
         "lookup.title": "Find an item",
@@ -101,6 +104,9 @@ GUIDE = {
         "keys.guide": "\nCtrl+J opens the game guide: zone quests for your level, items, your class skills, gods and races, from the DreamLand website. Enter or Go there on a quest or an item walks you to its zone, and on a skill to its teacher's zone. Up and Down change a level field. Alt+Shift+Q, I, S, G and R open its Quests, Items, Skills, Gods and Races tab straight away, each where you left it. It refreshes itself once a day.\n",
     },
     "ua": {
+        "menu.serverlists": "&Списки від сервера (експериментально)",
+        "serverlists.on": "Списки від сервера увімкнено. Інвентар, спорядження, who, крамниця, уміння та інші команди відкриваються як списки, і вони є в меню Гра.",
+        "serverlists.off": "Списки від сервера вимкнено. Команди показують звичайний текст гри. Увімкнути можна в Параметрах, Списки від сервера (експериментально).",
         "lookup.none": "Нічого не знайдено. Випадкові речі створюються, коли випадають, тому їх немає у списку речей.",
         "menu.lookup": "Знайти &річ...\tCtrl+K",
         "lookup.title": "Знайти річ",
@@ -202,6 +208,9 @@ GUIDE = {
         "keys.guide": "\nCtrl+J відкриває довідник гри: завдання зон для твого рівня, речі, вміння твого класу, богів і раси, з сайту DreamLand. Enter або Піти туди на завданні чи речі веде тебе до її зони, а на вмінні до зони його вчителя. Стрілки вгору і вниз змінюють рівень. Alt+Shift+Q, I, S, G і R одразу відкривають вкладки Завдання, Речі, Уміння, Боги і Раси, кожну там, де ти її залишив. Він оновлюється сам раз на добу.\n",
     },
     "ru": {
+        "menu.serverlists": "&Списки от сервера (экспериментально)",
+        "serverlists.on": "Списки от сервера включены. Инвентарь, снаряжение, who, магазин, умения и другие команды открываются как списки, и они есть в меню Игра.",
+        "serverlists.off": "Списки от сервера выключены. Команды показывают обычный текст игры. Включить можно в Параметрах, Списки от сервера (экспериментально).",
         "lookup.none": "Ничего не найдено. Случайные вещи создаются, когда выпадают, поэтому их нет в списке вещей.",
         "menu.lookup": "Найти &вещь...\tCtrl+K",
         "lookup.title": "Найти вещь",
