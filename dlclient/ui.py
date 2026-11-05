@@ -1598,6 +1598,27 @@ class MainFrame(wx.Frame):
             return True
         return len(words) > 1 and words[1] in ("read", "look", "info", "show")
 
+    RUN_LEFT = ("You still have left to run:", "Тобі залишалося бігти:", "Тебе оставалось бежать:")
+
+    def note_run_left(self, lines):
+        """Remember the rest of a run the game stopped, so it can be resumed."""
+        for line in lines:
+            if line.text.strip().startswith(self.RUN_LEFT):
+                cmd = next((l.command for l in line.links if (l.command or "").startswith("run ")), None)
+                if not cmd:
+                    rest = line.text.split(":", 1)[1].strip()
+                    cmd = "run " + rest if rest else None
+                if cmd:
+                    self.run_left = cmd
+                    wx.CallAfter(self.say, self.tr("run.stopped"))
+
+    def resume_run(self):
+        cmd = getattr(self, "run_left", None)
+        if not cmd:
+            return self.say(self.tr("run.none"))
+        self.run_left = None
+        self.send_command(cmd)
+
     def walk_path(self, command):
         """Ask the game for the route to a room and run it, closing the list."""
         if self.capture and self.capture.get("timer"):
