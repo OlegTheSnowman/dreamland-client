@@ -184,9 +184,11 @@ class ViewPanel(wx.Panel):
         super().__init__(parent)
         self.window, self.view, self.tr = window, view, window.tr
         self.shown = []
+        self.all_rows = None  # view.rows(), kept until a filter changes: typing only narrows it
+        self.last_focus = None
         s = wx.BoxSizer(wx.VERTICAL)
         s.Add(wx.StaticText(self, label=self.tr("find.search")), 0, wx.LEFT | wx.RIGHT | wx.TOP, 6)
-        self.search = _name(wx.TextCtrl(self), self.tr("find.search"))
+        self.search = _name(wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER), self.tr("find.search"))
         s.Add(self.search, 0, wx.EXPAND | wx.ALL, 6)
         self.filters_line = wx.StaticText(self, label="")
         s.Add(self.filters_line, 0, wx.LEFT | wx.RIGHT, 8)
@@ -196,7 +198,9 @@ class ViewPanel(wx.Panel):
         body.Add(self.list, 1, wx.EXPAND | wx.ALL, 6)
         buttons = wx.BoxSizer(wx.VERTICAL)
         self.buttons = []
-        details = wx.Button(self, label=self.tr("find.details"))
+        # Details is the dialog's default button: the dialog keeps Enter from
+        # the list itself, so Enter on the list presses this button.
+        details = self.details_button = wx.Button(self, label=self.tr("find.details"))
         details.Bind(wx.EVT_BUTTON, lambda e: self.show_details())
         buttons.Add(details, 0, wx.EXPAND | wx.ALL, 3)
         for act in view.actions:
@@ -212,6 +216,7 @@ class ViewPanel(wx.Panel):
         s.Add(body, 1, wx.EXPAND)
         self.SetSizer(s)
         self.search.Bind(wx.EVT_TEXT, lambda e: self.refill())
+        self.search.Bind(wx.EVT_TEXT_ENTER, lambda e: self.show_details())
         self.search.Bind(wx.EVT_KEY_DOWN, self.on_search_key)
         self.list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
         self.list.Bind(wx.EVT_CHAR, self.on_list_char)
@@ -224,11 +229,17 @@ class ViewPanel(wx.Panel):
         old = self.selected()
         index = self.list.GetSelection()
         words = self.search.GetValue().strip().lower().split()
-        rows = self.view.rows()
+        if self.all_rows is None:
+            self.all_rows = self.view.rows()
+        rows = self.all_rows
         if words:
             rows = [r for r in rows if all(w in r.search for w in words)]
         self.shown = rows
-        self.list.Set([r.label for r in rows] or [self.view.empty or self.tr("find.none")])
+        self.list.Freeze()
+        try:
+            self.list.Set([r.label for r in rows] or [self.view.empty or self.tr("find.none")])
+        finally:
+            self.list.Thaw()
         target = keep if keep is not None else (old.payload if old else None)
         pos = next((i for i, r in enumerate(rows) if target is not None and r.payload is target), None)
         if pos is None:
@@ -256,14 +267,10 @@ class ViewPanel(wx.Panel):
         if key in (wx.WXK_DOWN, wx.WXK_PAGEDOWN) and self.shown:
             self.list.SetFocus()
             return
-        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
-            return self.show_details()
         event.Skip()
 
     def on_list_key(self, event):
         key = event.GetKeyCode()
-        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
-            return self.show_details()
         if key == wx.WXK_UP and self.list.GetSelection() <= 0:
             self.search.SetFocus()
             self.search.SetInsertionPointEnd()
@@ -323,7 +330,7 @@ class FindWindow(wx.Dialog):
                 self.book.AddPage(p, v.title)
                 self.panels.append(p)
             s.Add(self.book, 1, wx.EXPAND | wx.ALL, 4)
-            self.book.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, lambda e: (e.Skip(), self.panel().refill()))
+            self.book.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_page)
         else:
             self.book = None
             self.panels = [ViewPanel(self, self, views[0])]
@@ -341,9 +348,27 @@ class FindWindow(wx.Dialog):
             self.Bind(wx.EVT_MENU, lambda e, k=key: self.select_view(k), id=ident)
             accel.append((wx.ACCEL_ALT | wx.ACCEL_SHIFT, ord(letter), ident))
         self.SetAcceleratorTable(wx.AcceleratorTable(accel))
+        self.Bind(wx.EVT_CHILD_FOCUS, self.on_child_focus)
         for p in self.panels:
             p.refill()
+        self.SetDefaultItem(self.panels[0].details_button)
         self.panels[0].list.SetFocus()
+
+    def on_page(self, event):
+        event.Skip()
+        p = self.panel()
+        self.SetDefaultItem(p.details_button)
+        p.refill()
+
+    def on_child_focus(self, event):
+        win = event.GetWindow()
+        for p in self.panels:
+            w = win
+            while w is not None and w is not p and w is not self:
+                w = w.GetParent()
+            if w is p:
+                p.last_focus = win
+        event.Skip()
 
     def say(self, text):
         if self.say_cb:
@@ -357,13 +382,16 @@ class FindWindow(wx.Dialog):
             if p.view.key == key:
                 if self.book:
                     self.book.SetSelection(i)
+                self.SetDefaultItem(p.details_button)
                 p.refill()
                 p.list.SetFocus()
                 return True
         return False
 
     def refill_all(self):
+        """After a filter or the character changed: every view reads its rows again."""
         for p in self.panels:
+            p.all_rows = None
             p.refill()
 
     # ---- filters -----------------------------------------------------------
@@ -406,5 +434,7 @@ class FindWindow(wx.Dialog):
         if view_key:
             self.select_view(view_key)
         p = self.panel()
-        wx.CallAfter(p.list.SetFocus)
+        # Back where the focus was: the search box, the list or a button.
+        target = p.list if view_key or not p.last_focus else p.last_focus
+        wx.CallAfter(lambda: target and target.SetFocus())
         return self.ShowModal()

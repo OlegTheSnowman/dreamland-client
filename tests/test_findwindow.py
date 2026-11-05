@@ -127,6 +127,21 @@ class FindWindowTest(unittest.TestCase):
         self.assertEqual(w.panel().view.key, "races")
         w.Destroy()
 
+    def test_levels_follow_character(self):
+        site = SD.Site("en", INDEX, BODY_EN, WEAPONS, ARMOR)
+        optss = []
+        ctx = {"level": 11, "class": "ninja", "align": "evil"}
+        views, update = FV.guide_views(self.tr, site, ctx, {}, lambda c: None, optss.append)
+        levels = next(f for f in views[1].filters if f.key == "levels")
+        self.assertEqual(levels.get(), (1, 11))
+        levels.set((3, 11))
+        self.assertEqual(optss[-1]["levels"], [3, None])
+        update({"level": 12})
+        self.assertEqual(levels.get(), (3, 12))
+        levels.set((3, 20))
+        update({"level": 13})
+        self.assertEqual(levels.get(), (3, 20))
+
     def test_item_search(self):
         site = SD.Site("en", INDEX, BODY_EN, WEAPONS, ARMOR)
         v = FV.item_search_view(self.tr, site)

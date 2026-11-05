@@ -174,8 +174,11 @@ def guide_views(tr, site, ctx, opts, save_ctx, save_opts):
         [(k, tr("guide.stat." + label)) for k, label in SD.STATS]
 
     def item_levels():
-        v = opts.get("levels")
-        return tuple(v) if v else (1, max(1, ctx["level"]))
+        # Stored as [low, high], high None meaning "my level", so the range
+        # follows the character as it levels up unless set apart from it.
+        v = opts.get("levels") or [1, None]
+        low, high = v[0], v[1] if len(v) > 1 else None
+        return (low, high or max(1, ctx["level"]))
 
     def item_rows():
         k, slot = kind(), get_slot()
@@ -197,11 +200,15 @@ def guide_views(tr, site, ctx, opts, save_ctx, save_opts):
                            key=lambda it: (-SD.stat_gain(it, stat), -(SD.num(it.get("level")) or 0)))
         if opts.get("nominus"):
             found = [it for it in found if not SD.has_minus(it)]
-        return [Row(item_row(tr, site, it, k), it, item_row(tr, site, it, k) + " " + " ".join(site.item_place(it)))
-                for it in found]
+        out = []
+        for it in found:
+            label = item_row(tr, site, it, k)
+            out.append(Row(label, it, label + " " + " ".join(site.item_place(it))))
+        return out
 
     def set_levels(value):
-        opts["levels"] = list(value)
+        low, high = value
+        opts["levels"] = [low, None if high == ctx["level"] else high]
         save_opts(dict(opts))
 
     item_kind = lambda it: "weapon" if it.get("wclass") else "armor"
