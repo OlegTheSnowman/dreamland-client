@@ -116,73 +116,70 @@ class ParseTest(unittest.TestCase):
 
 
 class GuideTest(unittest.TestCase):
-    def test_dialog(self):
-        import wx
-        from dlclient.guide import GuideDialog, item_detail
+    """The guide's views (findviews.guide_views) on the fixture data."""
+
+    def test_views(self):
+        from dlclient import findviews as FV
+        from dlclient.guide import item_detail
         from dlclient.i18n import Tr
-        app = wx.App.Get() or wx.App()
-        frame = wx.Frame(None)
-        saved = []
+        tr = Tr("en")
         site = SD.Site("en", INDEX, BODY_EN, WEAPONS, ARMOR)
-        dlg = GuideDialog(frame, Tr("en"), site, {"level": 11, "class": "ninja", "align": "evil"}, saved.append)
-        quests, items, skills, gods, races = dlg.pages
-        self.assertEqual(len(quests.rows), 2)
-        self.assertIn("Drow City: Bring the spider", quests.rows[0][0])
-        self.assertIn("Midgaard, 3s2w", quests.rows[0][1])
+        ctxs, optss = [], []
+        views, update = FV.guide_views(tr, site, {"level": 11, "class": "ninja", "align": "evil"}, {},
+                                       ctxs.append, optss.append)
+        quests, items, skills, gods, races = views
+        rows = quests.rows()
+        self.assertEqual(len(rows), 2)
+        self.assertIn("Drow City: Bring the spider", rows[0].label)
+        self.assertIn("Midgaard, 3s2w", quests.detail(rows[0].payload))
         # From level 1 by default: the level 5 dagger is listed too.
-        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade", "plain dagger"])
-        self.assertIn("Limited item", items.rows[0][1])
-        self.assertEqual([r[0] for r in skills.rows[:3]], ["Level 1, reached: dagger", "Level 1, reached: kick", "Level 7, reached: hide"])
-        self.assertEqual(gods.rows[0][0], "Taiphoen")
-        self.assertIn("The dark one.", gods.rows[0][1])
-        items.stat.SetSelection(3)  # damroll (after Any, Overall, hitroll)
-        items.refill()
-        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
-        items.stat.SetSelection(2)  # hitroll: neither weapon has any
-        items.refill()
-        self.assertEqual(items.rows, [])
-        items.stat.SetSelection(1)  # overall: the blade (dam +2) ranks, the bare dagger does not
-        items.refill()
-        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["black blade"])
-        items.stat.SetSelection(0)
+        self.assertEqual([r.label.split(",")[0] for r in items.rows()], ["black blade", "plain dagger"])
+        self.assertIn("Limited item", items.detail(items.rows()[0].payload))
+        self.assertEqual([r.label for r in skills.rows()[:3]],
+                         ["Level 1, reached: dagger", "Level 1, reached: kick", "Level 7, reached: hide"])
+        self.assertEqual(gods.rows()[0].label, "Taiphoen")
+        self.assertIn("The dark one.", gods.detail(gods.rows()[0].payload))
+        stat = next(f for f in items.filters if f.key == "stat")
+        stat.set("dr")
+        self.assertEqual([r.label.split(",")[0] for r in items.rows()], ["black blade"])
+        stat.set("hr")  # neither weapon has any hitroll
+        self.assertEqual(items.rows(), [])
+        stat.set("overall")  # the blade (dam +2) ranks, the bare dagger does not
+        self.assertEqual([r.label.split(",")[0] for r in items.rows()], ["black blade"])
+        stat.set("")
         self.assertEqual(site.class_weapons("ninja"), [])  # the fixture's skills are not weapons
         self.assertEqual(site.zone_info("Drow City"), ("3-20", "high"))
-        self.assertIn("Zone: 3-20, high.", item_detail(Tr("en"), site, {"nameEn": "x", "level": 5, "areaEn": "Drow City", "vnum": 1}, "armor"))
+        self.assertIn("Zone: 3-20, high.", item_detail(tr, site, {"nameEn": "x", "level": 5, "areaEn": "Drow City",
+                                                                   "vnum": 1}, "armor"))
         self.assertTrue(SD.has_minus({"hr": -1}))
         self.assertEqual(SD.stat_gain({"saves": -2}, "saves"), 2)
-        dlg.set_context({"level": 2, "class": "ninja", "align": "good"})
-        self.assertEqual(saved[-1], {"level": 2, "class": "ninja", "align": "good"})
-        self.assertEqual(quests.rows, [])
-        self.assertEqual(skills.list.GetSelection(), 2)
-        quests.search.SetValue("slave")
-        quests.fits.SetValue(False)
-        quests.refill()
-        self.assertEqual(len(quests.rows), 1)
-        quests.list.SetSelection(0)
-        quests.go_selected()
-        self.assertEqual(dlg.choice[:2], ["Drow City", "Drow City"])
-        self.assertEqual(dlg.level.number(), 2)
-        dlg.level.ChangeValue("abc")
-        self.assertEqual(dlg.level.number(), 1)
-        dlg.select_tab(dlg.tab_index("races"))
-        self.assertEqual(dlg.book.GetSelection(), 4)
-        self.assertIs(dlg.last_focus, races.search)
-        dlg.Destroy()
-        opts = []
-        dlg = GuideDialog(frame, Tr("en"), site, {"level": 11}, None, {"kind": "armor", "nominus": True,
-                                                                       "fits": False, "stat": "hp"}, opts.append)
-        quests, items = dlg.pages[:2]
-        self.assertEqual((items.kind.GetSelection(), items.nominus.GetValue(), quests.fits.GetValue()), (1, True, False))
-        self.assertEqual(items.stat.GetSelection(), 4)  # health
-        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["mail"])
-        dlg.save_opt("fits", True)
-        self.assertTrue(opts[-1]["fits"] and opts[-1]["kind"] == "armor")
-        dlg.Destroy()
-        from dlclient.guide import item_matches
-        self.assertEqual([it["vnum"] for _k, it in item_matches(site, "BLACK")], [4100])
-        self.assertEqual(item_matches(site, "  "), [])
-        frame.Destroy()
-        del app
+        quests.filters[0].set(2)
+        quests.filters[2].set("good")
+        self.assertEqual(ctxs[-1], {"level": 2, "class": "ninja", "align": "good"})
+        self.assertEqual(quests.rows(), [])
+        fits = next(f for f in quests.filters if f.key == "fits")
+        fits.set(False)
+        slave = [r for r in quests.rows() if "slave" in r.search]
+        self.assertEqual(len(slave), 1)
+        self.assertEqual(quests.actions[0].value(slave[0].payload)[:2], ["Drow City", "Drow City"])
+        update({"level": 11})
+        self.assertEqual(quests.filters[0].get(), 11)
+
+    def test_saved_options(self):
+        from dlclient import findviews as FV
+        from dlclient.i18n import Tr
+        site = SD.Site("en", INDEX, BODY_EN, WEAPONS, ARMOR)
+        optss = []
+        views, _update = FV.guide_views(Tr("en"), site, {"level": 11}, {"kind": "armor", "nominus": True,
+                                                                         "fits": False, "stat": "hp"},
+                                        lambda c: None, optss.append)
+        quests, items = views[:2]
+        get = lambda v, k: next(f for f in v.filters if f.key == k).get()
+        self.assertEqual((get(items, "kind"), get(items, "nominus"), get(quests, "fits"), get(items, "stat")),
+                         ("armor", True, False, "hp"))
+        self.assertEqual([r.label.split(",")[0] for r in items.rows()], ["mail"])
+        next(f for f in quests.filters if f.key == "fits").set(True)
+        self.assertTrue(optss[-1]["fits"] and optss[-1]["kind"] == "armor")
 
 
 if __name__ == "__main__":

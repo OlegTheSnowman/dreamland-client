@@ -26,7 +26,9 @@ from .presence import classify, kind_of
 from . import textlists
 from . import framelists
 from . import sitedata
-from .guide import GuideDialog, ItemLookupDialog
+from .guide import TABS as GUIDE_TABS
+from .findwindow import FindWindow
+from . import findviews
 
 AREA_WALK, AREA_ROUTE = "walk", "route"
 
@@ -225,7 +227,6 @@ class MainFrame(wx.Frame):
         ident = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, lambda e: self.fight_menu(), id=ident)
         accel.append((wx.ACCEL_ALT, ord("8"), ident))
-        from .guide import TABS as GUIDE_TABS
         for name, letter in GUIDE_TABS:
             ident = wx.NewIdRef()
             self.Bind(wx.EVT_MENU, lambda e, n=name: self.open_guide(n), id=ident)
@@ -1295,8 +1296,9 @@ class MainFrame(wx.Frame):
             try:
                 amap = AreaMap(fetch_graph(area), lang)
                 dist = amap.steps_from(here)
-                rooms = sorted(((v, r["name"], dist.get(v)) for v, r in amap.rooms.items() if r["name"]),
-                               key=lambda r: (r[1].lower(), r[0]))
+                rooms = sorted(({"vnum": v, "name": r["name"], "steps": dist.get(v), "desc": r.get("desc", ""),
+                                 "exits": [x["dir"] for x in r["exits"]]} for v, r in amap.rooms.items() if r["name"]),
+                               key=lambda r: (r["name"].lower(), r["vnum"]))
             except NoMap:
                 rooms = None
             except Exception:
@@ -1309,14 +1311,17 @@ class MainFrame(wx.Frame):
             return self.say(self.tr("rooms.nomap"))
         if rooms is False:
             return self.say(self.tr("rooms.offline"))
-        dlg = dialogs.RoomsDialog(self, self.tr, rooms)
-        if dlg.ShowModal() == wx.ID_OK and dlg.choice:
-            vnum, how, self.walk_name = dlg.choice
-            self.walk_then = None
-            self.walk_until = time.time() + 5 if how == dlg.WALK else 0
-            self.send_command("path %d" % vnum)
+        dlg = FindWindow(self, self.tr, self.tr("rooms.title"), [findviews.rooms_view(self.tr, rooms)], say=self.say)
+        dlg.ShowModal()
+        result = dlg.result
         dlg.Destroy()
         self.input.SetFocus()
+        if result:
+            _view, how, room = result
+            self.walk_name = room["name"]
+            self.walk_then = None
+            self.walk_until = time.time() + 5 if how == "walk" else 0
+            self.send_command("path %d" % room["vnum"])
 
     def open_areas(self):
         self.say(self.tr("areas.loading"))
@@ -1392,7 +1397,8 @@ class MainFrame(wx.Frame):
         if self.guide_keep:
             if not self.guide_keep.char:
                 self.guide_keep.char = self.guide_key()
-            self.guide_keep.set_context(ctx)
+            self.guide_keep.update_ctx(ctx)
+            self.guide_keep.refill_all()
 
     def open_guide(self, tab=None):
         if self.guide_dlg:
@@ -1419,9 +1425,12 @@ class MainFrame(wx.Frame):
             return self.say(self.tr("guide.offline"))
         if self.guide_dlg or self.guide_keep:
             return
-        dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context,
-                          self.prefs.get("guide_opts") or {}, self.save_guide_opts)
-        dlg.lang, dlg.char = self.tr.lang, self.guide_key()
+        views, update_ctx = findviews.guide_views(self.tr, site, self.guide_context(),
+                                                  self.prefs.get("guide_opts") or {},
+                                                  self.save_guide_context, self.save_guide_opts)
+        dlg = FindWindow(self, self.tr, self.tr("guide.title"), views, say=self.say,
+                         tab_keys={letter: name for name, letter in GUIDE_TABS}, size=(860, 680))
+        dlg.lang, dlg.char, dlg.update_ctx = self.tr.lang, self.guide_key(), update_ctx
         self.guide_keep = dlg
         self._guide_show(dlg, first=True, tab=tab)
 
@@ -1449,7 +1458,8 @@ class MainFrame(wx.Frame):
             return self.say(self.tr("guide.offline"))
         if self.guide_dlg or self.lookup_keep:
             return
-        dlg = ItemLookupDialog(self, self.tr, site)
+        dlg = FindWindow(self, self.tr, self.tr("lookup.title"), [findviews.item_search_view(self.tr, site)],
+                         say=self.say)
         dlg.lang = self.tr.lang
         self.lookup_keep = dlg
         self._guide_show(dlg, first=True)
@@ -1458,21 +1468,13 @@ class MainFrame(wx.Frame):
         """Show the guide; closing only hides it, so Ctrl+J reopens it as it was left."""
         self.guide_dlg = dlg
         try:
-            if first:
-                dlg.choice = None
-                i = dlg.tab_index(tab) if tab and hasattr(dlg, "tab_index") else None
-                if i is not None:
-                    dlg.select_tab(i)
-                names = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
-            elif tab and hasattr(dlg, "tab_index"):
-                names = dlg.choice if dlg.show_again(tab) == wx.ID_OK else None
-            else:
-                names = dlg.choice if dlg.show_again() == wx.ID_OK else None
+            dlg.show_again(tab)
         finally:
             self.guide_dlg = None
         self.input.SetFocus()
-        if names:
-            self.walk_to_zone(names)
+        # Every action of the guide and the item search walks to a zone.
+        if dlg.result and dlg.result[2]:
+            self.walk_to_zone(dlg.result[2])
 
     def walk_to_zone(self, names):
         """Walk to the area with one of these names (any language), as the area list does."""
@@ -1498,17 +1500,24 @@ class MainFrame(wx.Frame):
     def _areas_loaded(self, areas):
         if not areas:
             return self.say(self.tr("areas.offline"))
-        dlg = dialogs.AreasDialog(self, self.tr, areas, self.prefs.get("areas_sort", "name"))
-        choice = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
-        self.prefs["areas_sort"] = dlg.sort_key()
+        opts = dict(self.prefs.get("areas_find") or {})
+        opts.setdefault("sort", self.prefs.get("areas_sort", "name"))
+
+        def save(state):
+            self.prefs["areas_find"] = {"sort": state["sort"], "levels": list(state["levels"])}
+            self.prefs["areas_sort"] = state["sort"]
+        dlg = FindWindow(self, self.tr, self.tr("areas.title"), [findviews.areas_view(self.tr, areas, opts, save)],
+                         say=self.say)
+        dlg.ShowModal()
+        result = dlg.result
         dlg.Destroy()
         self.input.SetFocus()
-        if not choice:
+        if not result:
             return
-        area, how = choice
-        if how == dlg.HELP:
+        _view, how, area = result
+        if how == "help":
             return self.send_command("help " + (area["en"] or area["ru"]))
-        self.walk_area(area, AREA_ROUTE if how == dlg.ROUTE else AREA_WALK)
+        self.walk_area(area, AREA_ROUTE if how == "route" else AREA_WALK)
 
     def walk_area(self, area, how):
         route = area["route"]

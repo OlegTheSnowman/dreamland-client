@@ -59,7 +59,7 @@ STRINGS = {
             "Tab and Shift+Tab move between the game output and the command field. Alt opens the menus.\n"
             "In the game output, Enter on a line runs its command, or opens a menu when the line has several.\n"
             "The Applications key or Shift+F10 in the output always opens that menu.\n"
-            "Ctrl+L lists the clickable commands from recent output. Ctrl+R lists the rooms of the area you are in, from the web map; type to search, Enter walks there. When a run stops, Ctrl+Shift+R continues it.\n"
+            "Ctrl+L lists the clickable commands from recent output. Ctrl+R lists the rooms of the area you are in, from the web map, with the Walk there and Show route buttons. When a run stops, Ctrl+Shift+R continues it.\n"
             "Chat buffers: Alt+Left and Alt+Right switch between all chat, tells, group and each channel; Alt+Up and Alt+Down read older and newer messages, Alt+End the newest. Ctrl+H opens the chat history.\n"
             "Ctrl+S reads health, mana and moves.\n"
             "Ctrl+Space finishes the word you are typing from words in the output, newest first; press again for the next one, and after the last it goes back to what you typed.\n"
@@ -134,7 +134,7 @@ STRINGS = {
             "Tab і Shift+Tab перемикають між виводом гри і полем команди. Alt відкриває меню.\n"
             "У виводі гри Enter на рядку виконує його команду або відкриває меню, якщо команд кілька.\n"
             "Клавіша контекстного меню або Shift+F10 у виводі завжди відкриває це меню.\n"
-            "Ctrl+L показує команди з останнього виводу. Ctrl+R показує кімнати зони, де ти є, з веб-мапи; пиши для пошуку, Enter веде туди. Якщо біг перервано, Ctrl+Shift+R продовжує його.\n"
+            "Ctrl+L показує команди з останнього виводу. Ctrl+R показує кімнати зони, де ти є, з веб-мапи, з кнопками Піти туди і Показати шлях. Якщо біг перервано, Ctrl+Shift+R продовжує його.\n"
             "Буфери чату: Alt+стрілки вліво і вправо перемикають між усім чатом, особистими, групою і кожним каналом; Alt+стрілки вгору і вниз читають старіші й новіші повідомлення, Alt+End найновіше. Ctrl+H відкриває історію чату.\n"
             "Ctrl+S читає здоровʼя, ману і рухи.\n"
             "Ctrl+пробіл доповнює слово, яке ти набираєш, словами з виводу, найновіші першими; ще раз - наступне, після останнього повертається набране.\n"
@@ -209,7 +209,7 @@ STRINGS = {
             "Tab и Shift+Tab переключают между выводом игры и полем команды. Alt открывает меню.\n"
             "В выводе игры Enter на строке выполняет ее команду или открывает меню, если команд несколько.\n"
             "Клавиша контекстного меню или Shift+F10 в выводе всегда открывает это меню.\n"
-            "Ctrl+L показывает команды из последнего вывода. Ctrl+R показывает комнаты зоны, где ты находишься, с веб-карты; пиши для поиска, Enter ведет туда. Если бег прерван, Ctrl+Shift+R продолжает его.\n"
+            "Ctrl+L показывает команды из последнего вывода. Ctrl+R показывает комнаты зоны, где ты находишься, с веб-карты, с кнопками Пойти туда и Показать путь. Если бег прерван, Ctrl+Shift+R продолжает его.\n"
             "Буферы чата: Alt+стрелки влево и вправо переключают между всем чатом, личными, группой и каждым каналом; Alt+стрелки вверх и вниз читают более старые и новые сообщения, Alt+End самое новое. Ctrl+H открывает историю чата.\n"
             "Ctrl+S читает здоровье, ману и движение.\n"
             "Ctrl+пробел дополняет набираемое слово словами из вывода, самые новые первыми; еще раз - следующее, после последнего возвращается набранное.\n"
@@ -243,7 +243,7 @@ for _lang, _strings in EXTRA.items():
     STRINGS[_lang]["keys.text"] += _strings["keys.extra"] + _strings["keys.areas"] + _strings["keys.help"] + _strings["keys.four"] + _strings["keys.status"] + _strings["keys.tones"] + _strings["keys.room"] + _strings["keys.typed"]
 for _lang, _strings in GUIDE.items():
     STRINGS[_lang].update(_strings)
-    STRINGS[_lang]["keys.text"] += _strings["keys.guide"] + _strings["keys.lookup"]
+    STRINGS[_lang]["keys.text"] += _strings["keys.guide"] + _strings["keys.lookup"] + _strings["keys.find"]
 
 
 class Tr:
