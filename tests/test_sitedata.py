@@ -127,6 +127,12 @@ class GuideTest(unittest.TestCase):
         quests.fits.SetValue(False)
         quests.refill()
         self.assertEqual(len(quests.rows), 1)
+        quests.list.SetSelection(0)
+        quests.go_selected()
+        self.assertEqual(dlg.choice[:2], ["Drow City", "Drow City"])
+        self.assertEqual(dlg.level.number(), 2)
+        dlg.level.ChangeValue("abc")
+        self.assertEqual(dlg.level.number(), 1)
         dlg.Destroy()
         frame.Destroy()
         del app

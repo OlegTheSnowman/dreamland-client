@@ -26,6 +26,18 @@ from . import textlists
 from . import framelists
 from . import sitedata
 from .guide import GuideDialog
+
+AREA_WALK, AREA_ROUTE = "walk", "route"
+
+
+def match_area(areas, names):
+    """The area whose name in any language is one of names (lower case)."""
+    for n in names:
+        for a in areas:
+            full = a["name"].lower()
+            if n in (a["en"].lower(), a["ru"].lower(), full) or full.startswith(n + ", "):
+                return a
+    return None
 from .chat import ChatStore
 from .script import ScriptHost
 from .sound import SoundPlayer, fetch_from_url, fetch_live_library
@@ -1358,11 +1370,34 @@ class MainFrame(wx.Frame):
         dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context)
         self.guide_dlg = dlg
         try:
-            dlg.ShowModal()
+            names = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
         finally:
             self.guide_dlg = None
             dlg.Destroy()
         self.input.SetFocus()
+        if names:
+            self.walk_to_zone(names)
+
+    def walk_to_zone(self, names):
+        """Walk to the area with one of these names (any language), as the area list does."""
+        lang = self.tr.lang
+        want = [n.strip().lower() for n in names if n and n.strip()]
+
+        def load():
+            try:
+                areas = fetch_areas(lang)
+            except Exception:
+                areas = None
+            wx.CallAfter(found, areas)
+
+        def found(areas):
+            if not areas:
+                return self.say(self.tr("areas.offline"))
+            area = match_area(areas, want)
+            if area:
+                return self.walk_area(area, AREA_WALK)
+            self.say(self.tr("guide.nozone", names[0]))
+        threading.Thread(target=load, daemon=True).start()
 
     def _areas_loaded(self, areas):
         if not areas:
@@ -1377,11 +1412,14 @@ class MainFrame(wx.Frame):
         area, how = choice
         if how == dlg.HELP:
             return self.send_command("help " + (area["en"] or area["ru"]))
+        self.walk_area(area, AREA_ROUTE if how == dlg.ROUTE else AREA_WALK)
+
+    def walk_area(self, area, how):
         route = area["route"]
         if not route:
             return self.say(area.get("note") or self.tr("areas.noroute"))
         then = (" " + self.tr("areas.then", area["note"])) if area.get("note") else ""
-        if how == dlg.ROUTE:
+        if how == AREA_ROUTE:
             self.input.ChangeValue("run " + route)
             self.input.SetInsertionPointEnd()
             return self.say(self.tr("areas.route", route) + then)

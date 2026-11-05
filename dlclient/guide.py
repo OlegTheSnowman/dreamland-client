@@ -12,6 +12,31 @@ from .dialogs import labelled
 ALIGNS = ("", "good", "neutral", "evil")
 
 
+class NumberField(wx.TextCtrl):
+    """A plain edit box for a level: screen readers read its label, Up and Down change it."""
+
+    def __init__(self, parent, value, low=1, high=100):
+        super().__init__(parent, value=str(value))
+        self.low, self.high = low, high
+        self.Bind(wx.EVT_KEY_DOWN, self.on_key)
+
+    def number(self):
+        text = self.GetValue().strip()
+        n = int(text) if text.isdigit() else self.low
+        return min(max(n, self.low), self.high)
+
+    def set_number(self, n):
+        self.ChangeValue(str(min(max(int(n), self.low), self.high)))
+
+    def on_key(self, event):
+        step = {wx.WXK_UP: 1, wx.WXK_DOWN: -1, wx.WXK_PAGEUP: 10, wx.WXK_PAGEDOWN: -10}.get(event.GetKeyCode())
+        if not step:
+            return event.Skip()
+        n = min(max(self.number() + step, self.low), self.high)
+        self.SetValue(str(n))
+        self.SetInsertionPointEnd()
+
+
 def levels_text(tr, low, high):
     if low and high:
         return tr("guide.levels", low, high)
@@ -114,9 +139,9 @@ def info_detail(site, rec, fields):
 class Page(wx.Panel):
     """A search field, a list and a read-only details box."""
 
-    def __init__(self, book, tr, title):
+    def __init__(self, book, tr, title, go=None):
         super().__init__(book)
-        self.tr = tr
+        self.tr, self.go = tr, go
         self.rows = []
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.search = labelled(self, self.sizer, tr("guide.search"), wx.TextCtrl(self))
@@ -125,11 +150,16 @@ class Page(wx.Panel):
         self.list = labelled(self, self.sizer, tr("guide.list"), wx.ListBox(self), expand="grow")
         self.detail = labelled(self, self.sizer, tr("guide.details"), wx.TextCtrl(
             self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2, size=wx.Size(-1, 140)), expand="grow")
+        if go:
+            button = wx.Button(self, label=tr("guide.go"))
+            self.sizer.Add(button, 0, wx.ALL, 4)
+            button.Bind(wx.EVT_BUTTON, lambda e: self.go_selected())
         self.SetSizer(self.sizer)
         self.search.Bind(wx.EVT_TEXT, lambda e: self.refill())
         self.search.Bind(wx.EVT_KEY_DOWN, self.on_search_key)
         self.list.Bind(wx.EVT_LISTBOX, lambda e: self.show())
-        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.detail.SetFocus())
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.go_selected() if go else self.detail.SetFocus())
+        self.list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
         book.AddPage(self, title)
 
     def on_search_key(self, event):
@@ -138,8 +168,18 @@ class Page(wx.Panel):
             return
         event.Skip()
 
+    def on_list_key(self, event):
+        if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            return self.go_selected() if self.go else self.detail.SetFocus()
+        event.Skip()
+
+    def go_selected(self):
+        i = self.list.GetSelection()
+        if self.go and 0 <= i < len(self.rows) and len(self.rows[i]) > 3 and self.rows[i][3]:
+            self.go(self.rows[i][3])
+
     def build(self):
-        """Override: list of (label, detail, search text)."""
+        """Override: list of (label, detail, search text[, place names to walk to])."""
         return []
 
     def refill(self, select=0):
@@ -165,7 +205,8 @@ class GuideDialog(wx.Dialog):
         self.classes = site.class_names()
         s = wx.BoxSizer(wx.VERTICAL)
         top = wx.BoxSizer(wx.HORIZONTAL)
-        self.level = wx.SpinCtrl(self, min=1, max=100, initial=int(ctx.get("level") or 1))
+        self.choice = None
+        self.level = NumberField(self, int(ctx.get("level") or 1))
         self.cls = wx.Choice(self, choices=[tr("guide.anyclass")] + self.classes)
         self.align = wx.Choice(self, choices=[tr("guide.align." + (a or "any")) for a in ALIGNS])
         for label, ctrl in ((tr("guide.level"), self.level), (tr("guide.class"), self.cls),
@@ -183,7 +224,6 @@ class GuideDialog(wx.Dialog):
         close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
         s.Add(close, 0, wx.ALL, 4)
         self.SetSizer(s)
-        self.level.Bind(wx.EVT_SPINCTRL, lambda e: self.context_changed())
         self.level.Bind(wx.EVT_TEXT, lambda e: self.context_changed())
         self.cls.Bind(wx.EVT_CHOICE, lambda e: self.context_changed())
         self.align.Bind(wx.EVT_CHOICE, lambda e: self.context_changed())
@@ -196,13 +236,13 @@ class GuideDialog(wx.Dialog):
     def context(self):
         i = self.cls.GetSelection()
         j = self.align.GetSelection()
-        return {"level": self.level.GetValue(),
+        return {"level": self.level.number(),
                 "class": self.classes[i - 1] if 1 <= i <= len(self.classes) else "",
                 "align": ALIGNS[j] if 0 <= j < len(ALIGNS) else ""}
 
     def set_context(self, ctx, notify=True):
         if ctx.get("level"):
-            self.level.SetValue(int(ctx["level"]))
+            self.level.set_number(ctx["level"])
         cls = (ctx.get("class") or "").lower()
         names = [c.lower() for c in self.classes]
         self.cls.SetSelection(names.index(cls) + 1 if cls in names else 0)
@@ -217,15 +257,26 @@ class GuideDialog(wx.Dialog):
         if getattr(self, "pages", None):
             if ctx["level"] != self.items.level:
                 self.items.level = ctx["level"]
-                self.items.low.SetValue(max(1, ctx["level"] - 5))
-                self.items.high.SetValue(ctx["level"])
+                self.items.low.set_number(max(1, ctx["level"] - 5))
+                self.items.high.set_number(ctx["level"])
             for p in self.pages:
                 p.refill(p.list.GetSelection() if p is not self.skills else self.skill_start())
+
+    def go(self, names):
+        """Close the guide and let the main window walk to this zone."""
+        self.choice = list(names)
+        if self.IsModal():
+            self.EndModal(wx.ID_OK)
+
+    def zone_names(self, q):
+        e = next((x for x in self.site.index if x.get("id") == q["zone_id"]), {})
+        toc = e.get("toc") or {}
+        return [n for n in (q["zone"], toc.get("en"), toc.get("ru"), toc.get("ua")) if n]
 
     # Pages ---------------------------------------------------------------
     def quests_page(self):
         tr, site = self.tr, self.site
-        page = Page(self.book, tr, tr("guide.tab.quests"))
+        page = Page(self.book, tr, tr("guide.tab.quests"), self.go)
         page.fits = wx.CheckBox(page, label=tr("guide.mylevel"))
         page.fits.SetValue(True)
         page.extra.Add(page.fits, 0, wx.ALL, 4)
@@ -238,21 +289,22 @@ class GuideDialog(wx.Dialog):
             for q in sorted(quests, key=lambda q: (q["low"], q["zone"].lower())):
                 if page.fits.GetValue() and not quest_fits(q, ctx["level"], ctx["align"]):
                     continue
-                out.append((quest_row(tr, q), quest_detail(tr, site, q), q["zone"] + " " + q["text"]))
+                out.append((quest_row(tr, q), quest_detail(tr, site, q), q["zone"] + " " + q["text"],
+                            self.zone_names(q)))
             return out
         page.build = build
         return page
 
     def items_page(self):
         tr, site = self.tr, self.site
-        page = Page(self.book, tr, tr("guide.tab.items"))
-        lvl = self.level.GetValue()
+        page = Page(self.book, tr, tr("guide.tab.items"), self.go)
+        lvl = self.level.number()
         page.level = lvl
         page.kind = wx.Choice(page, choices=[tr("guide.weapons"), tr("guide.armor")])
         page.kind.SetSelection(0)
         page.slot = wx.Choice(page)
-        page.low = wx.SpinCtrl(page, min=1, max=100, initial=max(1, lvl - 5))
-        page.high = wx.SpinCtrl(page, min=1, max=100, initial=lvl)
+        page.low = NumberField(page, max(1, lvl - 5))
+        page.high = NumberField(page, lvl)
         row = wx.BoxSizer(wx.HORIZONTAL)
         for label, ctrl in ((tr("guide.kind"), page.kind), (tr("guide.slot"), page.slot),
                             (tr("guide.from"), page.low), (tr("guide.to"), page.high)):
@@ -274,15 +326,15 @@ class GuideDialog(wx.Dialog):
             k = kind()
             i = page.slot.GetSelection()
             slot = page.slot_values[i] if 0 < i < len(page.slot_values) else None
-            found = site.items(k, page.low.GetValue(), page.high.GetValue(), self.context()["align"] or None,
+            found = site.items(k, page.low.number(), page.high.number(), self.context()["align"] or None,
                                slot=slot if k == "armor" else None, wclass=slot if k == "weapon" else None)
             return [(item_row(tr, site, it, k), item_detail(tr, site, it, k),
-                     item_row(tr, site, it, k) + " " + " ".join(site.item_place(it))) for it in found]
+                     item_row(tr, site, it, k) + " " + " ".join(site.item_place(it)),
+                     [n for n in (site.item_place(it)[0], it.get("areaEn"), it.get("area")) if n]) for it in found]
         slots()
         page.kind.Bind(wx.EVT_CHOICE, lambda e: (slots(), page.refill()))
         page.slot.Bind(wx.EVT_CHOICE, lambda e: page.refill())
         for ctrl in (page.low, page.high):
-            ctrl.Bind(wx.EVT_SPINCTRL, lambda e: page.refill())
             ctrl.Bind(wx.EVT_TEXT, lambda e: page.refill())
         page.build = build
         self.items = page
