@@ -158,6 +158,19 @@ class GuideTest(unittest.TestCase):
         dlg.level.ChangeValue("abc")
         self.assertEqual(dlg.level.number(), 1)
         dlg.Destroy()
+        opts = []
+        dlg = GuideDialog(frame, Tr("en"), site, {"level": 11}, None, {"kind": "armor", "nominus": True,
+                                                                       "fits": False, "stat": "hp"}, opts.append)
+        quests, items = dlg.pages[:2]
+        self.assertEqual((items.kind.GetSelection(), items.nominus.GetValue(), quests.fits.GetValue()), (1, True, False))
+        self.assertEqual(items.stat.GetSelection(), 3)
+        self.assertEqual([r[0].split(",")[0] for r in items.rows], ["mail"])
+        dlg.save_opt("fits", True)
+        self.assertTrue(opts[-1]["fits"] and opts[-1]["kind"] == "armor")
+        dlg.Destroy()
+        from dlclient.guide import item_matches
+        self.assertEqual([it["vnum"] for _k, it in item_matches(site, "BLACK")], [4100])
+        self.assertEqual(item_matches(site, "  "), [])
         frame.Destroy()
         del app
 

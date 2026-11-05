@@ -167,7 +167,8 @@ class Page(wx.Panel):
         self.list.Bind(wx.EVT_LISTBOX, lambda e: self.show())
         self.list.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self.go_selected() if go else self.detail.SetFocus())
         self.list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
-        book.AddPage(self, title)
+        if isinstance(book, wx.Notebook):
+            book.AddPage(self, title)
 
     def on_search_key(self, event):
         if event.GetKeyCode() == wx.WXK_DOWN and self.rows:
@@ -205,10 +206,11 @@ class Page(wx.Panel):
 
 
 class GuideDialog(wx.Dialog):
-    def __init__(self, parent, tr, site, ctx, on_ctx=None):
+    def __init__(self, parent, tr, site, ctx, on_ctx=None, opts=None, on_opts=None):
         super().__init__(parent, title=tr("guide.title"), size=wx.Size(760, 640),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.tr, self.site, self.on_ctx = tr, site, on_ctx
+        self.opts, self.on_opts = dict(opts or {}), on_opts
         self.classes = site.class_names()
         s = wx.BoxSizer(wx.VERTICAL)
         top = wx.BoxSizer(wx.HORIZONTAL)
@@ -295,14 +297,20 @@ class GuideDialog(wx.Dialog):
     def zone_names(self, q):
         return self.site.zone_names(q["zone_id"]) or [q["zone"]]
 
+    def save_opt(self, key, value):
+        """Filters and checkboxes are remembered between sessions."""
+        self.opts[key] = value
+        if self.on_opts:
+            self.on_opts(dict(self.opts))
+
     # Pages ---------------------------------------------------------------
     def quests_page(self):
         tr, site = self.tr, self.site
         page = Page(self.book, tr, tr("guide.tab.quests"), self.go)
         page.fits = wx.CheckBox(page, label=tr("guide.mylevel"))
-        page.fits.SetValue(True)
+        page.fits.SetValue(bool(self.opts.get("fits", True)))
         page.extra.Add(page.fits, 0, wx.ALL, 4)
-        page.fits.Bind(wx.EVT_CHECKBOX, lambda e: page.refill())
+        page.fits.Bind(wx.EVT_CHECKBOX, lambda e: (self.save_opt("fits", page.fits.GetValue()), page.refill()))
         quests = site.zone_quests()
 
         def build():
@@ -323,7 +331,7 @@ class GuideDialog(wx.Dialog):
         lvl = self.level.number()
         page.level = lvl
         page.kind = wx.Choice(page, choices=[tr("guide.weapons"), tr("guide.armor")])
-        page.kind.SetSelection(0)
+        page.kind.SetSelection(1 if self.opts.get("kind") == "armor" else 0)
         page.slot = wx.Choice(page)
         page.low = NumberField(page, max(1, lvl - 5))
         page.high = NumberField(page, lvl)
@@ -336,8 +344,10 @@ class GuideDialog(wx.Dialog):
         page.extra.Add(row, 0, wx.EXPAND)
         page.stat = wx.Choice(page, choices=[tr("guide.anystat")] + [tr("guide.stat." + label)
                                                                       for _key, label in SD.STATS])
-        page.stat.SetSelection(0)
+        keys = [k for k, _l in SD.STATS]
+        page.stat.SetSelection(keys.index(self.opts["stat"]) + 1 if self.opts.get("stat") in keys else 0)
         page.nominus = wx.CheckBox(page, label=tr("guide.nominus"))
+        page.nominus.SetValue(bool(self.opts.get("nominus")))
         row2 = wx.BoxSizer(wx.HORIZONTAL)
         box = wx.BoxSizer(wx.VERTICAL)
         labelled(page, box, tr("guide.stat"), page.stat)
@@ -352,7 +362,8 @@ class GuideDialog(wx.Dialog):
             page.slot_values = [""] + site.slots(kind())
             prefix = "guide.wc." if kind() == "weapon" else "guide.wear."
             page.slot.Set([tr("guide.anyslot")] + [SD.word(tr, prefix, v) for v in page.slot_values[1:]])
-            page.slot.SetSelection(0)
+            want = self.opts.get("slot_" + kind())
+            page.slot.SetSelection(page.slot_values.index(want) if want in page.slot_values else 0)
 
         def build():
             k = kind()
@@ -371,10 +382,18 @@ class GuideDialog(wx.Dialog):
                      item_row(tr, site, it, k) + " " + " ".join(site.item_place(it)),
                      [n for n in (site.item_place(it)[0], it.get("areaEn"), it.get("area")) if n]) for it in found]
         slots()
-        page.kind.Bind(wx.EVT_CHOICE, lambda e: (slots(), page.refill()))
-        page.slot.Bind(wx.EVT_CHOICE, lambda e: page.refill())
-        page.stat.Bind(wx.EVT_CHOICE, lambda e: page.refill())
-        page.nominus.Bind(wx.EVT_CHECKBOX, lambda e: page.refill())
+        def stat_key():
+            j = page.stat.GetSelection()
+            return SD.STATS[j - 1][0] if 1 <= j <= len(SD.STATS) else ""
+
+        def slot_key():
+            i = page.slot.GetSelection()
+            return page.slot_values[i] if 0 <= i < len(page.slot_values) else ""
+        page.kind.Bind(wx.EVT_CHOICE, lambda e: (self.save_opt("kind", kind()), slots(), page.refill()))
+        page.slot.Bind(wx.EVT_CHOICE, lambda e: (self.save_opt("slot_" + kind(), slot_key()), page.refill()))
+        page.stat.Bind(wx.EVT_CHOICE, lambda e: (self.save_opt("stat", stat_key()), page.refill()))
+        page.nominus.Bind(wx.EVT_CHECKBOX, lambda e: (self.save_opt("nominus", page.nominus.GetValue()),
+                                                      page.refill()))
         for ctrl in (page.low, page.high):
             ctrl.Bind(wx.EVT_TEXT, lambda e: page.refill())
         page.build = build
@@ -420,3 +439,69 @@ class GuideDialog(wx.Dialog):
                      " ".join([r["name"]] + [r.get(f, "") for f in fields])) for r in records]
         page.build = build
         return page
+
+
+def item_matches(site, query, limit=200):
+    """Weapons and armor whose name in any language contains every word of query."""
+    words = query.strip().lower().split()
+    if not words:
+        return []
+    out = []
+    for kind, src in (("weapon", site.weapons), ("armor", site.armor)):
+        for it in src:
+            names = " ".join(str(it.get(k) or "") for k in ("nameEn", "name", "nameUa")).lower()
+            if all(w in names for w in words):
+                out.append((kind, it))
+    out.sort(key=lambda p: (site.item_name(p[1]).lower(), -(SD.num(p[1].get("level")) or 0)))
+    return out[:limit]
+
+
+class ItemLookupDialog(wx.Dialog):
+    """Ctrl+K: type part of an item's name, read its stats and where it comes from."""
+
+    def __init__(self, parent, tr, site):
+        super().__init__(parent, title=tr("lookup.title"), size=wx.Size(700, 560),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.tr, self.site, self.choice = tr, site, None
+        s = wx.BoxSizer(wx.VERTICAL)
+        self.page = Page(self, tr, "", self.go)
+        self.page.build = self.build
+        s.Add(self.page, 1, wx.EXPAND)
+        close = wx.Button(self, wx.ID_CANCEL, tr("list.close"))
+        s.Add(close, 0, wx.ALL, 4)
+        self.SetSizer(s)
+        self.last_focus = self.page.search
+        self.Bind(wx.EVT_CHILD_FOCUS, self.on_child_focus)
+        self.page.refill()
+        self.page.search.SetFocus()
+
+    def build(self):
+        tr, site = self.tr, self.site
+        q = self.page.search.GetValue()
+        if not q.strip():
+            return [(tr("lookup.hint"), "", "")]
+        found = item_matches(site, q)
+        if not found:
+            return [(tr("lookup.none"), tr("lookup.none"), q)]
+        return [(item_row(tr, site, it, k), item_detail(tr, site, it, k),
+                 " ".join(str(it.get(f) or "") for f in ("nameEn", "name", "nameUa")),
+                 [n for n in (site.item_place(it)[0], it.get("areaEn"), it.get("area")) if n])
+                for k, it in found]
+
+    def on_child_focus(self, event):
+        win = event.GetWindow()
+        if win and win is not self:
+            self.last_focus = win
+        event.Skip()
+
+    def go(self, names):
+        self.choice = list(names)
+        if self.IsModal():
+            self.EndModal(wx.ID_OK)
+
+    def show_again(self):
+        self.choice = None
+        target = self.last_focus
+        if target:
+            wx.CallAfter(lambda: target and target.SetFocus())
+        return self.ShowModal()

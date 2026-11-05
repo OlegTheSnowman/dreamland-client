@@ -1,5 +1,10 @@
 GUIDE = {
     "en": {
+        "lookup.none": "Nothing found. Random items are rolled when they drop, so they are not in the item list.",
+        "menu.lookup": "Find an &item...\tCtrl+K",
+        "lookup.title": "Find an item",
+        "lookup.hint": "Type part of an item's name.",
+        "keys.lookup": "Ctrl+K finds an item by name, in any language, and shows its stats and where it comes from. Enter walks you to its zone.\n",
         "guide.stat": "Best for stat",
         "guide.anystat": "Any",
         "guide.nominus": "Hide items with minuses",
@@ -96,6 +101,11 @@ GUIDE = {
         "keys.guide": "\nCtrl+J opens the game guide: zone quests for your level, items, your class skills, gods and races, from the DreamLand website. Enter or Go there on a quest or an item walks you to its zone, and on a skill to its teacher's zone. Up and Down change a level field. It refreshes itself once a day.\n",
     },
     "ua": {
+        "lookup.none": "Нічого не знайдено. Випадкові речі створюються, коли випадають, тому їх немає у списку речей.",
+        "menu.lookup": "Знайти &річ...\tCtrl+K",
+        "lookup.title": "Знайти річ",
+        "lookup.hint": "Введи частину назви речі.",
+        "keys.lookup": "Ctrl+K шукає річ за назвою будь-якою мовою і показує її параметри та звідки вона. Enter веде до її зони.\n",
         "guide.stat": "Найкраще для параметра",
         "guide.anystat": "Будь-який",
         "guide.nominus": "Сховати речі з мінусами",
@@ -192,6 +202,11 @@ GUIDE = {
         "keys.guide": "\nCtrl+J відкриває довідник гри: завдання зон для твого рівня, речі, вміння твого класу, богів і раси, з сайту DreamLand. Enter або Піти туди на завданні чи речі веде тебе до її зони, а на вмінні до зони його вчителя. Стрілки вгору і вниз змінюють рівень. Він оновлюється сам раз на добу.\n",
     },
     "ru": {
+        "lookup.none": "Ничего не найдено. Случайные вещи создаются, когда выпадают, поэтому их нет в списке вещей.",
+        "menu.lookup": "Найти &вещь...\tCtrl+K",
+        "lookup.title": "Найти вещь",
+        "lookup.hint": "Введи часть названия вещи.",
+        "keys.lookup": "Ctrl+K ищет вещь по названию на любом языке и показывает ее параметры и откуда она. Enter ведет в ее зону.\n",
         "guide.stat": "Лучшее для параметра",
         "guide.anystat": "Любой",
         "guide.nominus": "Скрыть вещи с минусами",

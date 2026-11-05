@@ -25,7 +25,7 @@ from .presence import classify, kind_of
 from . import textlists
 from . import framelists
 from . import sitedata
-from .guide import GuideDialog
+from .guide import GuideDialog, ItemLookupDialog
 
 AREA_WALK, AREA_ROUTE = "walk", "route"
 
@@ -158,6 +158,7 @@ class MainFrame(wx.Frame):
         self.account_wait = None
         self.guide_dlg = None
         self.guide_keep = None
+        self.lookup_keep = None
         self.guide_asked = False
         self.sound_fetching = set()
         self.completion = None
@@ -243,6 +244,7 @@ class MainFrame(wx.Frame):
         self._item(game, tr("menu.rooms"), lambda e: self.open_rooms())
         self._item(game, tr("menu.areas"), lambda e: self.open_areas())
         self._item(game, tr("menu.guide"), lambda e: self.open_guide())
+        self._item(game, tr("menu.lookup"), lambda e: self.open_lookup())
         self._item(game, tr("menu.status"), lambda e: self.read_status())
         panels = wx.Menu()
         self._item(panels, tr("menu.panel.all"), lambda e: self.show_panels())
@@ -1329,7 +1331,20 @@ class MainFrame(wx.Frame):
         if key:
             store = dict(self.prefs.get("guide") or {})
             store[key] = dict(ctx)
-            self.prefs["guide"] = store
+            if store != self.prefs.get("guide"):
+                self.prefs["guide"] = store
+                self.save_prefs_now()
+
+    def save_guide_opts(self, opts):
+        self.prefs["guide_opts"] = opts
+        self.save_prefs_now()
+
+    def save_prefs_now(self):
+        if not os.environ.get("DLCLIENT_QUIET"):
+            try:
+                prefs_mod.save(self.prefs)
+            except OSError:
+                pass
 
     def guide_char(self, data):
         """account_chars reply: fill in the current character's level and class."""
@@ -1378,9 +1393,39 @@ class MainFrame(wx.Frame):
             return self.say(self.tr("guide.offline"))
         if self.guide_dlg or self.guide_keep:
             return
-        dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context)
+        dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context,
+                          self.prefs.get("guide_opts") or {}, self.save_guide_opts)
         dlg.lang, dlg.char = self.tr.lang, self.guide_key()
         self.guide_keep = dlg
+        self._guide_show(dlg, first=True)
+
+    def open_lookup(self):
+        """Ctrl+K: find an item by name. Kept like the guide, so it reopens as it was left."""
+        if self.guide_dlg:
+            return
+        lang = self.tr.lang
+        keep = self.lookup_keep
+        if keep and keep.lang == lang:
+            return self._guide_show(keep)
+        if keep:
+            keep.Destroy()
+            self.lookup_keep = None
+        self.say(self.tr("guide.loading"))
+
+        def load():
+            sitedata.refresh(lang)
+            site = sitedata.Site.load(lang)
+            wx.CallAfter(self._lookup_loaded, site)
+        threading.Thread(target=load, daemon=True).start()
+
+    def _lookup_loaded(self, site):
+        if not site.weapons and not site.armor:
+            return self.say(self.tr("guide.offline"))
+        if self.guide_dlg or self.lookup_keep:
+            return
+        dlg = ItemLookupDialog(self, self.tr, site)
+        dlg.lang = self.tr.lang
+        self.lookup_keep = dlg
         self._guide_show(dlg, first=True)
 
     def _guide_show(self, dlg, first=False):
