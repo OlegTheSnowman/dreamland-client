@@ -157,6 +157,7 @@ class MainFrame(wx.Frame):
         self.autobuff_dlg = None
         self.account_wait = None
         self.guide_dlg = None
+        self.guide_keep = None
         self.guide_asked = False
         self.sound_fetching = set()
         self.completion = None
@@ -1347,16 +1348,24 @@ class MainFrame(wx.Frame):
         if cls:
             ctx["class"] = str(cls)
         self.save_guide_context(ctx)
-        if self.guide_dlg:
-            self.guide_dlg.set_context(ctx)
+        if self.guide_keep:
+            if not self.guide_keep.char:
+                self.guide_keep.char = self.guide_key()
+            self.guide_keep.set_context(ctx)
 
     def open_guide(self):
         if self.guide_dlg:
             return
-        self.say(self.tr("guide.loading"))
         lang = self.tr.lang
         if self.conn.rpc("account_chars"):
             self.guide_asked = True
+        keep = self.guide_keep
+        if keep and keep.lang == lang and keep.char == self.guide_key():
+            return self._guide_show(keep)
+        if keep:
+            keep.Destroy()
+            self.guide_keep = None
+        self.say(self.tr("guide.loading"))
 
         def load():
             sitedata.refresh(lang)
@@ -1367,13 +1376,24 @@ class MainFrame(wx.Frame):
     def _guide_loaded(self, site):
         if not site.ready():
             return self.say(self.tr("guide.offline"))
+        if self.guide_dlg or self.guide_keep:
+            return
         dlg = GuideDialog(self, self.tr, site, self.guide_context(), self.save_guide_context)
+        dlg.lang, dlg.char = self.tr.lang, self.guide_key()
+        self.guide_keep = dlg
+        self._guide_show(dlg, first=True)
+
+    def _guide_show(self, dlg, first=False):
+        """Show the guide; closing only hides it, so Ctrl+J reopens it as it was left."""
         self.guide_dlg = dlg
         try:
-            names = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
+            if first:
+                dlg.choice = None
+                names = dlg.choice if dlg.ShowModal() == wx.ID_OK else None
+            else:
+                names = dlg.choice if dlg.show_again() == wx.ID_OK else None
         finally:
             self.guide_dlg = None
-            dlg.Destroy()
         self.input.SetFocus()
         if names:
             self.walk_to_zone(names)

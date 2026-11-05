@@ -235,7 +235,23 @@ class GuideDialog(wx.Dialog):
         for p in self.pages:
             p.refill()
         self.book.SetSelection(0)
+        self.last_focus = self.pages[0].search
+        self.Bind(wx.EVT_CHILD_FOCUS, self.on_child_focus)
         self.pages[0].search.SetFocus()
+
+    def on_child_focus(self, event):
+        win = event.GetWindow()
+        if win and win is not self:
+            self.last_focus = win
+        event.Skip()
+
+    def show_again(self):
+        """Open the kept window where it was left: same tab, filters and focus."""
+        self.choice = None
+        target = self.last_focus
+        if target:
+            wx.CallAfter(lambda: target and target.SetFocus())
+        return self.ShowModal()
 
     # Character -----------------------------------------------------------
     def context(self):
@@ -246,13 +262,14 @@ class GuideDialog(wx.Dialog):
                 "align": ALIGNS[j] if 0 <= j < len(ALIGNS) else ""}
 
     def set_context(self, ctx, notify=True):
+        before = self.context()
         if ctx.get("level"):
             self.level.set_number(ctx["level"])
         cls = (ctx.get("class") or "").lower()
         names = [c.lower() for c in self.classes]
         self.cls.SetSelection(names.index(cls) + 1 if cls in names else 0)
         self.align.SetSelection(ALIGNS.index(ctx["align"]) if ctx.get("align") in ALIGNS else 0)
-        if notify:
+        if notify and self.context() != before:
             self.context_changed()
 
     def context_changed(self):
